@@ -9,6 +9,7 @@ use config::Config;
 fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     let mut fun_js = JsonValue::new_array();
     //
+    fun_js["type"] = json::JsonValue::String("function".to_owned());
     fun_js["name"] = json::JsonValue::String(format!("{}",ident));
     //
     let mut args_js = JsonValue::new_array();
