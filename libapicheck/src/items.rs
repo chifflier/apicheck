@@ -218,9 +218,9 @@ fn impl_to_json(ident: &ast::Ident,
     // type implementing the trait
     js["impl_type"] = json::JsonValue::String(pprust::ty_to_string(&ty));
     // trait being implemented
-    let thetrait = match traitref {
-        None => "".to_owned(),
-        Some(ref tref) => pprust::path_to_string(&tref.path)
+    let (self_impl,thetrait) = match traitref {
+        None => (true,"".to_owned()),
+        Some(ref tref) => (false,pprust::path_to_string(&tref.path))
     };
     js["trait"] = json::JsonValue::String(thetrait);
     //
@@ -232,7 +232,10 @@ fn impl_to_json(ident: &ast::Ident,
     let s_where = pprust::where_clause_to_string(&generics.where_clause);
     js["where"] = json::JsonValue::String(s_where);
     // implementation items
-    let v : Vec<JsonValue> = implitems.iter().filter_map(|ref it| check_implitem(it)).collect();
+    let v : Vec<JsonValue> = implitems.iter().filter_map(|ref it| {
+        if self_impl && it.vis.node != ast::VisibilityKind::Public { None }
+        else { check_implitem(it) }
+    }).collect();
     js["items"] = json::JsonValue::Array(v);
     //
     js

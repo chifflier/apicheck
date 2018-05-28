@@ -14,3 +14,13 @@ pub trait Foo<T> {
 
 pub struct MyStruct;
 
+impl MyStruct {
+    pub fn new() -> MyStruct { MyStruct }
+
+    fn should_not_see_me(&self) { }
+}
+
+impl Default for MyStruct {
+    fn default() -> MyStruct { MyStruct }
+}
+
