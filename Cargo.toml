@@ -1,0 +1,13 @@
+[package]
+name = "apicheck"
+version = "0.1.0"
+authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
+
+[workspace]
+members = [
+	"libapicheck",
+	"apicheck_plugin",
+]
+
+[dependencies]
+libapicheck = {path="libapicheck"}
