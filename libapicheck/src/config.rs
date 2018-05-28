@@ -3,7 +3,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 pub struct Config {
-    pub debug: bool,
+    pub debug: usize,
 }
 
 /// Defines the name of an input - either a file or stdin.
@@ -16,7 +16,7 @@ pub enum FileName {
 impl Default for Config {
     fn default() -> Config {
         Config{
-            debug: false,
+            debug: 0,
         }
     }
 }

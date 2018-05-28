@@ -26,7 +26,7 @@ fn main() {
     }
     // setup config
     let mut config = libapicheck::config::Config::default();
-    if matches.opt_present("d") { config.debug = true; }
+    config.debug = matches.opt_count("d");
     let input = if !matches.free.is_empty() {
         matches.free[0].clone()
     } else {
@@ -34,6 +34,6 @@ fn main() {
         return;
     };
     // work !
-    if config.debug { println!("Processing file {}", input); }
+    if config.debug > 0 { println!("Processing file {}", input); }
     libapicheck::process_file(input, &config);
 }
