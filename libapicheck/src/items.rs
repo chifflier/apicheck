@@ -64,13 +64,31 @@ fn trait_to_json(ident: &ast::Ident,
                  _isauto: &ast::IsAuto,
                  unsafety: &ast::Unsafety,
                  generics: &ast::Generics,
-                 _typarambounds: &ast::TyParamBounds,
+                 typarambounds: &ast::TyParamBounds,
                  traititems: &Vec<ast::TraitItem>) -> JsonValue {
     let mut js = json::JsonValue::new_object();
     //
     js["name"] = json::JsonValue::String(format!("{}",ident));
     js["type"] = json::JsonValue::String("trait".to_owned());
-    // XXX typarambounds
+    // typarambounds
+    let v : Vec<_> = typarambounds.iter().filter_map(|ref typarambound| {
+        match typarambound {
+            ast::TyParamBound::TraitTyParamBound(ref polytraitref, _) => {
+                // println!("polytraitref: {:?}", polytraitref);
+                let mut js = json::JsonValue::new_object();
+                let s = pprust::generic_params_to_string(&polytraitref.bound_generic_params);
+                js["bound_generic_params"] = json::JsonValue::String(s);
+                let s = pprust::path_to_string(&polytraitref.trait_ref.path);
+                js["trait_ref"] = json::JsonValue::String(s);
+                Some(js)
+            },
+            ast::TyParamBound::RegionTyParamBound(ref lifetime) => {
+                let s = pprust::lifetime_to_string(lifetime);
+                Some(json::JsonValue::String(s))
+            }
+        }
+    }).collect();
+    js["typarambounds"] = json::JsonValue::Array(v);
     // add qualifiers
     js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
     //

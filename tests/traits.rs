@@ -8,6 +8,9 @@ pub trait DebugPrint : Debug {
     fn debugprint(&self);
 }
 
-pub struct MyStruct;
+pub trait Foo<T> {
+    fn foo_to_string(&self, foo:T) -> String;
+}
 
+pub struct MyStruct;
 
