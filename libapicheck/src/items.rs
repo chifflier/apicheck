@@ -1,6 +1,7 @@
 extern crate json;
 use json::JsonValue;
 
+use syntax::abi;
 use syntax::ast;
 use syntax::print::pprust;
 
@@ -15,10 +16,8 @@ fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     let mut args_js = JsonValue::new_array();
     for i in &fndecl.inputs {
         let mut arg_js = JsonValue::new_array();
-        // println!("    i: {:?}", i);
         arg_js["type"] = json::JsonValue::String(pprust::ty_to_string(&i.ty));
         arg_js["name"] = json::JsonValue::String(pprust::pat_to_string(&i.pat));
-        // i.id ?
         let _ = args_js.push(arg_js);
     }
     fun_js["inputs"] = args_js;
@@ -30,6 +29,33 @@ fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     fun_js["output"] = json::JsonValue::String(s);
     //
     fun_js["variadic"] = json::JsonValue::Boolean(fndecl.variadic);
+    //
+    fun_js
+}
+
+fn fun_to_json(ident: &ast::Ident,
+               fndecl: &ast::FnDecl,
+               unsafety: &ast::Unsafety,
+               constness: &ast::Constness,
+               abi: &abi::Abi,
+               generics: &ast::Generics) -> JsonValue {
+    // create initial json from function declaration
+    let mut fun_js = fun_decl_to_json(&ident, &fndecl);
+    // add qualifiers
+    fun_js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
+    let c = match &constness {
+        ast::Constness::Const => "const",
+        ast::Constness::NotConst => "",
+    };
+    fun_js["constness"] = json::JsonValue::String(c.to_owned());
+    //
+    fun_js["abi"] = json::JsonValue::String(format!("{}",abi.name()));
+    //
+    let s_gen = pprust::generic_params_to_string(&generics.params);
+    fun_js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&generics.where_clause);
+    fun_js["where"] = json::JsonValue::String(s_where);
     //
     fun_js
 }
@@ -96,42 +122,100 @@ fn enum_to_json(ident: &ast::Ident, enumdef: &ast::EnumDef, generics: &ast::Gene
     js
 }
 
+fn impl_to_json(ident: &ast::Ident,
+                unsafety: &ast::Unsafety,
+                _polarity: &ast::ImplPolarity,
+                _default: &ast::Defaultness,
+                traitref: &Option<ast::TraitRef>,
+                ty: &ast::Ty,
+                generics: &ast::Generics,
+                implitems: &Vec<ast::ImplItem>) -> JsonValue {
+    let mut js = JsonValue::new_array();
+    js["type"] = json::JsonValue::String("impl".to_owned());
+    //
+    // XXX name is always empty ?!
+    js["name"] = json::JsonValue::String(format!("{}",ident));
+    // type implementing the trait
+    js["type"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+    // trait being implemented
+    let thetrait = match traitref {
+        None => "".to_owned(),
+        Some(ref tref) => pprust::path_to_string(&tref.path)
+    };
+    js["trait"] = json::JsonValue::String(thetrait);
+    //
+    js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
+    // generics
+    let s_gen = pprust::generic_params_to_string(&generics.params);
+    js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&generics.where_clause);
+    js["where"] = json::JsonValue::String(s_where);
+    // implementation items
+    let v : Vec<JsonValue> = implitems.iter().filter_map(|ref it| check_implitem(it)).collect();
+    js["items"] = json::JsonValue::Array(v);
+    //
+    js
+}
+
+fn check_implitem(it: &ast::ImplItem) -> Option<JsonValue> {
+    let mut js = json::JsonValue::new_object();
+    js["name"] = json::JsonValue::String(format!("{}",&it.ident));
+    match &it.node {
+        ast::ImplItemKind::Const(ref ty, _) => {
+            js["type"] = json::JsonValue::String("const".to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+        },
+        ast::ImplItemKind::Method(ref sig, _) => {
+            // shadow previous js
+            js = fun_to_json(&it.ident, &sig.decl, &sig.unsafety, &sig.constness.node, &sig.abi, &it.generics);
+            js["type"] = json::JsonValue::String("method".to_owned());
+        },
+        ast::ImplItemKind::Type(ref ty) => {
+            js["type"] = json::JsonValue::String("type".to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+        },
+        ast::ImplItemKind::Macro(ref _mac) => {
+            js["type"] = json::JsonValue::String("macro".to_owned());
+            // XXX macro invocation ?
+        },
+    }
+    let s = match &it.vis.node {
+        ast::VisibilityKind::Public => "public",
+        ast::VisibilityKind::Inherited => "",
+        _ => "",
+    };
+    js["visibility"] = json::JsonValue::String(s.to_owned());
+    // generics
+    let s_gen = pprust::generic_params_to_string(&it.generics.params);
+    js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&it.generics.where_clause);
+    js["where"] = json::JsonValue::String(s_where);
+    Some(js)
+}
+
 pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
-    // ignore some item types
+    // handle some specific item types
     match &it.node {
         ast::ItemKind::Use(_) => { return None; }
-        _ => ()
-    }
-    match &it.vis.node {
-        ast::VisibilityKind::Public => (),
+        // impl items are not marked public
+        ast::ItemKind::Impl(_,_,_,_,_,_,_) => (),
         _ => {
-            // XXX impl blocs are not public
-            if config.debug > 0 { println!("skipping item '{}', not public", it.ident); }
-            if config.debug > 1 { println!("skipped item:\n{:?}", it); }
-            return None;
+            match &it.vis.node {
+                ast::VisibilityKind::Public => (),
+                _ => {
+                    if config.debug > 0 { println!("skipping item '{}', not public", it.ident); }
+                    if config.debug > 1 { println!("skipped item:\n{:?}", it); }
+                    return None;
+                }
+            }
         }
     }
     if config.debug > 3 { println!("check_item, item {:#?}", it); }
     match &it.node {
         ast::ItemKind::Fn(ref decl, unsafety, constness, abi, generics, _block) => {
-            // create initial json from function declaration
-            let mut fun_js = fun_decl_to_json(&it.ident, &decl);
-            // add qualifiers
-            fun_js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
-            let c = match &constness.node {
-                ast::Constness::Const => "const",
-                ast::Constness::NotConst => "",
-            };
-            fun_js["constness"] = json::JsonValue::String(c.to_owned());
-            //
-            fun_js["abi"] = json::JsonValue::String(format!("{}",abi.name()));
-            //
-            let s_gen = pprust::generic_params_to_string(&generics.params);
-            fun_js["generics"] = json::JsonValue::String(s_gen);
-            // where clause
-            let s_where = pprust::where_clause_to_string(&generics.where_clause);
-            fun_js["where"] = json::JsonValue::String(s_where);
-            //
+            let mut fun_js = fun_to_json(&it.ident, &decl, unsafety, &constness.node, abi, &generics);
             if config.debug > 0 { println!("json: {}", fun_js.pretty(2)); }
             Some(fun_js)
         },
@@ -156,7 +240,15 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
+        ast::ItemKind::Impl(unsafety, polarity, default, generics, traitref, ty, implitems) => {
+            if config.debug > 2 { println!("Early pass, impl {:?}", &it.node) };
+            let mut js = impl_to_json(&it.ident, unsafety, polarity, default, &traitref, &ty, generics, implitems);
+            js["type"] = json::JsonValue::String("impl".to_owned());
+            if config.debug > 0 { println!("json: {}", js.pretty(2)); }
+            Some(js)
+        },
         // XXX ForeignMod, Trait, TraitAlias, Mod, etc.
+        // XXX Macros definition/invocation ?
         _ => None,
     }
 }
