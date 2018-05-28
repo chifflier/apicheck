@@ -307,6 +307,25 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
     }
     if config.debug > 3 { println!("check_item, item {:#?}", it); }
     match &it.node {
+        ast::ItemKind::Const(ref ty, _) => {
+            let mut js = json::JsonValue::new_object();
+            js["name"] = json::JsonValue::String(format!("{}",&it.ident));
+            js["type"] = json::JsonValue::String("const".to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            Some(js)
+        },
+        ast::ItemKind::Static(ref ty, ref mutability, _) => {
+            let mut js = json::JsonValue::new_object();
+            js["name"] = json::JsonValue::String(format!("{}",&it.ident));
+            js["type"] = json::JsonValue::String("static".to_owned());
+            let s = match mutability {
+                ast::Mutability::Mutable => "mut",
+                ast::Mutability::Immutable => ""
+            };
+            js["mutability"] = json::JsonValue::String(s.to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            Some(js)
+        },
         ast::ItemKind::Fn(ref decl, unsafety, constness, abi, generics, _block) => {
             let mut fun_js = fun_to_json(&it.ident, &decl, unsafety, &constness.node, abi, &generics);
             if config.debug > 0 { println!("json: {}", fun_js.pretty(2)); }
@@ -349,7 +368,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         ast::ItemKind::Mod(ref m) => {
             mod_to_json(&it.ident, &it.vis.node, m, config)
         },
-        // XXX TraitAlias, etc.
+        // XXX TraitAlias, Use, etc.
         // XXX Macros definition/invocation ?
         _ => None,
     }

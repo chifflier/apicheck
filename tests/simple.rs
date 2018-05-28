@@ -6,6 +6,14 @@
 
 use std::fmt::Debug;
 
+///////// const
+
+pub const CONSTANT0 : u32 = 0;
+
+///////// static
+
+pub static mut STATIC0 : u32 = 0;
+
 ///////// type aliases
 
 pub type Point = (u8, u8);
