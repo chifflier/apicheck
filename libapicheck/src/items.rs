@@ -400,7 +400,6 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         ast::ItemKind::Mod(ref m) => {
             mod_to_json(&it.ident, &it.vis.node, m, config)
         },
-        // XXX TraitAlias, etc.
         // XXX Macros definition/invocation ?
         _ => None,
     }

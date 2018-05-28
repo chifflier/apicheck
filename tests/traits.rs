@@ -1,3 +1,5 @@
+#![feature(trait_alias)]
+
 use std::default::Default;
 use std::fmt::Debug;
 
@@ -13,6 +15,8 @@ pub trait Foo<T> {
     fn foo_to_string(&self, foo:T) -> String;
 }
 
+
+
 pub struct MyStruct;
 
 impl MyStruct {
@@ -25,3 +29,6 @@ impl Default for MyStruct {
     fn default() -> MyStruct { MyStruct }
 }
 
+// // trait aliases (see https://github.com/rust-lang/rfcs/blob/master/text/1733-trait-alias.md)
+// trait SharableIterator = Iterator + Sync;
+// trait IntIterator = Iterator<Item=i32>;
