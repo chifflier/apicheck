@@ -60,6 +60,68 @@ fn fun_to_json(ident: &ast::Ident,
     fun_js
 }
 
+fn trait_to_json(ident: &ast::Ident,
+                 _isauto: &ast::IsAuto,
+                 unsafety: &ast::Unsafety,
+                 generics: &ast::Generics,
+                 _typarambounds: &ast::TyParamBounds,
+                 traititems: &Vec<ast::TraitItem>) -> JsonValue {
+    let mut js = json::JsonValue::new_object();
+    //
+    js["name"] = json::JsonValue::String(format!("{}",ident));
+    js["type"] = json::JsonValue::String("trait".to_owned());
+    // XXX typarambounds
+    // add qualifiers
+    js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
+    //
+    let s_gen = pprust::generic_params_to_string(&generics.params);
+    js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&generics.where_clause);
+    js["where"] = json::JsonValue::String(s_where);
+    // trait items
+    let v : Vec<JsonValue> = traititems.iter().filter_map(|ref it| check_traititem(it)).collect();
+    js["items"] = json::JsonValue::Array(v);
+    //
+    js
+}
+
+fn check_traititem(it: &ast::TraitItem) -> Option<JsonValue> {
+    let mut js = json::JsonValue::new_object();
+    js["name"] = json::JsonValue::String(format!("{}",&it.ident));
+    match &it.node {
+        ast::TraitItemKind::Const(ref ty, _) => {
+            js["type"] = json::JsonValue::String("const".to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+        },
+        ast::TraitItemKind::Method(ref sig, _) => {
+            // shadow previous js
+            js = fun_to_json(&it.ident, &sig.decl, &sig.unsafety, &sig.constness.node, &sig.abi, &it.generics);
+            js["type"] = json::JsonValue::String("method".to_owned());
+        },
+        ast::TraitItemKind::Type(_, ref ty) => {
+            js["type"] = json::JsonValue::String("type".to_owned());
+            match ty {
+                Some(ref ty) => {
+                    js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+                },
+                None => (), // XXX a type without type ?!
+            }
+        },
+        ast::TraitItemKind::Macro(ref _mac) => {
+            js["type"] = json::JsonValue::String("macro".to_owned());
+            // XXX macro invocation ?
+        },
+    }
+    // generics
+    let s_gen = pprust::generic_params_to_string(&it.generics.params);
+    js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&it.generics.where_clause);
+    js["where"] = json::JsonValue::String(s_where);
+    Some(js)
+}
+
 fn structfield_to_json(ident: &Option<ast::Ident>, field: &ast::StructField) -> JsonValue {
     let mut js = JsonValue::new_array();
     //
@@ -136,7 +198,7 @@ fn impl_to_json(ident: &ast::Ident,
     // XXX name is always empty ?!
     js["name"] = json::JsonValue::String(format!("{}",ident));
     // type implementing the trait
-    js["type"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+    js["impl_type"] = json::JsonValue::String(pprust::ty_to_string(&ty));
     // trait being implemented
     let thetrait = match traitref {
         None => "".to_owned(),
@@ -247,7 +309,13 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
-        // XXX ForeignMod, Trait, TraitAlias, Mod, etc.
+        ast::ItemKind::Trait(isauto, unsafety, generics, typarambounds, traititems) => {
+            if config.debug > 2 { println!("Early pass, trait {:?}", &it.node) };
+            let mut js = trait_to_json(&it.ident, &isauto, &unsafety, &generics, &typarambounds, &traititems);
+            if config.debug > 0 { println!("json: {}", js.pretty(2)); }
+            Some(js)
+        },
+        // XXX ForeignMod, TraitAlias, Mod, etc.
         // XXX Macros definition/invocation ?
         _ => None,
     }
