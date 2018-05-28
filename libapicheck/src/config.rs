@@ -24,7 +24,7 @@ impl Default for Config {
 impl fmt::Display for FileName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FileName::Real(ref p) => write!(f, "{:?}", p),
+            FileName::Real(ref p) => write!(f, "{}", p.to_str().unwrap_or(&"<invalid path>")),
             FileName::Stdin       => write!(f, "<stdin>"),
         }
     }
