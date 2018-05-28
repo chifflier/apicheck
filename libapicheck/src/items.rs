@@ -4,6 +4,8 @@ use json::JsonValue;
 use syntax::ast;
 use syntax::print::pprust;
 
+use config::Config;
+
 fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     let mut fun_js = JsonValue::new_array();
     //
@@ -93,15 +95,21 @@ fn enum_to_json(ident: &ast::Ident, enumdef: &ast::EnumDef, generics: &ast::Gene
     js
 }
 
-pub fn check_item(it: &ast::Item) -> Option<JsonValue> {
-    // if it.ident.name.as_str() == "lintme" {
-    //     cx.span_lint(TEST_LINT, it.span, "item is named 'lintme'");
-    // }
+pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
+    // ignore some item types
+    match &it.node {
+        ast::ItemKind::Use(_) => { return None; }
+        _ => ()
+    }
     match &it.vis.node {
         ast::VisibilityKind::Public => (),
-        _ => { println!("skipping item '{}', not public", it.ident); return None; }
+        _ => {
+            // XXX impl blocs are not public
+            if config.debug { println!("skipping item '{}', not public\n{:?}", it.ident, it); }
+            return None;
+        }
     }
-    println!("Early pass, item {:#?}", it);
+    if config.debug { println!("check_item, item {:#?}", it); }
     match &it.node {
         ast::ItemKind::Fn(ref decl, unsafety, constness, abi, generics, _block) => {
             // create initial json from function declaration
@@ -122,28 +130,28 @@ pub fn check_item(it: &ast::Item) -> Option<JsonValue> {
             let s_where = pprust::where_clause_to_string(&generics.where_clause);
             fun_js["where"] = json::JsonValue::String(s_where);
             //
-            println!("json: {}", fun_js.pretty(2));
+            if config.debug { println!("json: {}", fun_js.pretty(2)); }
             Some(fun_js)
         },
         ast::ItemKind::Struct(ref variantdata, ref generics) => {
-            println!("Early pass, struct {:#?} {:#?}", variantdata, generics);
+            if config.debug { println!("Early pass, struct {:#?} {:#?}", variantdata, generics); }
             let mut js = variantdata_to_json(&it.ident, variantdata, generics);
             js["type"] = json::JsonValue::String("struct".to_owned());
-            println!("json: {}", js.pretty(2));
+            if config.debug { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
         ast::ItemKind::Enum(ref enumdef, ref generics) => {
-            println!("Early pass, enum {:#?} {:#?}", enumdef, generics);
+            if config.debug { println!("Early pass, enum {:#?} {:#?}", enumdef, generics); }
             let mut js = enum_to_json(&it.ident, enumdef, generics);
-            println!("json: {}", js.pretty(2));
+            if config.debug { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
         ast::ItemKind::Union(ref variantdata, ref generics) => {
             // union fields are similar to structs
-            println!("Early pass, union {:#?} {:#?}", variantdata, generics);
+            if config.debug { println!("Early pass, union {:#?} {:#?}", variantdata, generics); }
             let mut js = variantdata_to_json(&it.ident, variantdata, generics);
             js["type"] = json::JsonValue::String("union".to_owned());
-            println!("json: {}", js.pretty(2));
+            if config.debug { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
         // XXX ForeignMod, Trait, TraitAlias, Mod, etc.

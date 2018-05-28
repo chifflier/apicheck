@@ -9,4 +9,5 @@ crate-type = ["dylib"]
 
 [dependencies]
 json = "0.11"
+lazy_static = "1.0"
 libapicheck = {path="../libapicheck"}

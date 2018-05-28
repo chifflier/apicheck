@@ -25,13 +25,11 @@ pub(crate) mod process;
 pub(crate) mod items;
 pub(crate) mod modules;
 
+pub mod config;
+use config::Config;
+
 use process::create_json_from_crate;
 pub use items::check_item;
-
-pub struct Config {
-    // The crate source to compile.
-    pub input_file: Path,
-}
 
 /// All the ways that parsing can fail.
 enum ParseError<'sess> {
@@ -43,11 +41,11 @@ enum ParseError<'sess> {
     Panic,
 }
 
-pub fn process_file(input: String) {
-    syntax::with_globals(|| process_file_inner(input))
+pub fn process_file(input: String, config: &Config) {
+    syntax::with_globals(|| process_file_inner(input, &config))
 }
 
-fn process_file_inner(input: String) {
+fn process_file_inner(input: String, config: &Config) {
     // build parsing session
     let codemap = Rc::new(CodeMap::new(FilePathMapping::empty()));
     let tty_handler = {
@@ -82,7 +80,13 @@ fn process_file_inner(input: String) {
         }
     };
 
-    let result = create_json_from_crate(&krate, &mut parse_session);
+    let result = create_json_from_crate(&krate, &mut parse_session, &config);
+    match result {
+        Ok(json) => {
+            println!("{}", json);
+        }
+        Err(e) => panic!("{:?}", e)
+    }
 }
 
 fn parse_input<'sess>(file: String, parse_session: &'sess ParseSess) -> Result<ast::Crate, ParseError<'sess>> {

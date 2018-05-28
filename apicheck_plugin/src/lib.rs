@@ -5,6 +5,9 @@
 extern crate libapicheck;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 extern crate rustc;
 extern crate rustc_plugin;
 extern crate syntax;
@@ -14,6 +17,14 @@ use rustc::hir;
 use rustc::lint::{EarlyContext, EarlyLintPassObject, LateContext, LateLintPassObject, LintArray, LintContext, LintPass};
 use rustc_plugin::Registry;
 use syntax::ast;
+
+use libapicheck::config::Config;
+
+lazy_static! {
+    static ref CONFIG: Config = {
+        Config::default()
+    };
+}
 
 declare_lint!(TEST_LINT, Warn, "Warn about items named 'lintme'");
 
@@ -48,7 +59,7 @@ impl rustc::lint::EarlyLintPass for EarlyPass {
         if it.ident.name.as_str() == "lintme" {
             cx.span_lint(TEST_LINT, it.span, "item is named 'lintme'");
         }
-        if let Some(js) = libapicheck::check_item(&it) {
+        if let Some(js) = libapicheck::check_item(&it, &CONFIG) {
             println!("json: {}", js.pretty(2));
         }
     }

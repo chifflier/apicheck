@@ -11,3 +11,4 @@ members = [
 
 [dependencies]
 libapicheck = {path="libapicheck"}
+getopts = "0.2"

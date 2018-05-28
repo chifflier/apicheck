@@ -16,15 +16,8 @@ use syntax::ast;
 use syntax::codemap;
 use syntax::parse::{parser, DirectoryOwnership};
 
-// use config::FileName;
+use config::FileName;
 // use utils::contains_skip;
-
-/// Defines the name of an input - either a file or stdin.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub enum FileName {
-    Real(PathBuf),
-    Stdin,
-}
 
 impl From<codemap::FileName> for FileName {
     fn from(name: codemap::FileName) -> FileName {
