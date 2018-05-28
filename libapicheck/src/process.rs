@@ -29,7 +29,7 @@ pub fn create_json_from_crate(krate: &ast::Crate, parse_session: &mut ParseSess,
         // println!("v: {:?}", v);
         //
         let mut mod_json = JsonValue::new_object();
-        mod_json["path"] = JsonValue::String(format!("{:?}",path));
+        mod_json["path"] = JsonValue::String(format!("{}",path));
         mod_json["items"] = JsonValue::Array(v);
         if config.debug > 0 {
             println!("path={:?}, json=\n{}", path, mod_json);

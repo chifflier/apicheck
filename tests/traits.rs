@@ -1,4 +1,5 @@
 use std::default::Default;
+use std::fmt::Debug;
 
 pub trait Summary {
     fn summarize(&self) -> String;

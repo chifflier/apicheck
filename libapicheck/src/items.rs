@@ -278,6 +278,16 @@ fn check_implitem(it: &ast::ImplItem) -> Option<JsonValue> {
     Some(js)
 }
 
+fn mod_to_json(ident: &ast::Ident, vis: &ast::VisibilityKind, m: &ast::Mod, config: &Config) -> Option<JsonValue> {
+    if *vis != ast::VisibilityKind::Public { return None; }
+    let mut js = json::JsonValue::new_object();
+    js["name"] = json::JsonValue::String(format!("{}",ident));
+    js["type"] = json::JsonValue::String("mod".to_owned());
+    let v : Vec<_> = m.items.iter().filter_map(|ref it| check_item(it, config)).collect();
+    js["items"] = json::JsonValue::Array(v);
+    Some(js)
+}
+
 pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
     // handle some specific item types
     match &it.node {
@@ -336,7 +346,10 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
-        // XXX ForeignMod, TraitAlias, Mod, etc.
+        ast::ItemKind::Mod(ref m) => {
+            mod_to_json(&it.ident, &it.vis.node, m, config)
+        },
+        // XXX TraitAlias, etc.
         // XXX Macros definition/invocation ?
         _ => None,
     }
