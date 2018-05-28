@@ -288,10 +288,37 @@ fn mod_to_json(ident: &ast::Ident, vis: &ast::VisibilityKind, m: &ast::Mod, conf
     Some(js)
 }
 
+fn usetree_to_json(ident: Option<ast::Ident>, usetree: &ast::UseTree) -> JsonValue {
+    let mut js = json::JsonValue::new_object();
+    match ident {
+        Some(ident) => js["name"] = json::JsonValue::String(format!("{}",ident)),
+        None        => ()
+    }
+    js["type"] = json::JsonValue::String("usetree".to_owned());
+    js["path"] = json::JsonValue::String(pprust::path_to_string(&usetree.prefix));
+    match usetree.kind {
+        ast::UseTreeKind::Simple(id) => {
+            let s = match id {
+                Some(ident) => format!("{}",ident),
+                None        => "".to_owned()
+            };
+            js["kind"] = json::JsonValue::String(format!("{}",s));
+        },
+        ast::UseTreeKind::Nested(ref nested) => {
+            let v : Vec<_> = nested.iter().map(|(u,_)| usetree_to_json(None, u)).collect();
+            js["kind"] = json::JsonValue::String("nested".to_owned());
+            js["usetree"] = json::JsonValue::Array(v);
+        },
+        ast::UseTreeKind::Glob => {
+            js["kind"] = json::JsonValue::String("*".to_owned());
+        },
+    };
+    js
+}
+
 pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
     // handle some specific item types
     match &it.node {
-        ast::ItemKind::Use(_) => { return None; }
         // impl items are not marked public
         ast::ItemKind::Impl(_,_,_,_,_,_,_) => (),
         _ => {
@@ -307,6 +334,11 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
     }
     if config.debug > 3 { println!("check_item, item {:#?}", it); }
     match &it.node {
+        ast::ItemKind::Use(ref usetree) => {
+            if config.debug > 2 { println!("Early pass, use {:?}", &it.node); }
+            let js = usetree_to_json(Some(it.ident), usetree);
+            Some(js)
+        },
         ast::ItemKind::Const(ref ty, _) => {
             let mut js = json::JsonValue::new_object();
             js["name"] = json::JsonValue::String(format!("{}",&it.ident));
@@ -368,7 +400,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         ast::ItemKind::Mod(ref m) => {
             mod_to_json(&it.ident, &it.vis.node, m, config)
         },
-        // XXX TraitAlias, Use, etc.
+        // XXX TraitAlias, etc.
         // XXX Macros definition/invocation ?
         _ => None,
     }
