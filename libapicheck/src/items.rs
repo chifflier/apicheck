@@ -403,12 +403,17 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         // XXX Macros definition/invocation ?
         _ => None,
     }.map(|mut js| {
+        // visibility
         let s = match it.vis.node {
             ast::VisibilityKind::Public => "public",
             ast::VisibilityKind::Inherited => "",
             _ => "",
         };
         js["visibility"] = json::JsonValue::String(s.to_owned());
+        // attributes
+        let v : Vec<_> = it.attrs.iter().map(|ref attr|
+                json::JsonValue::String(pprust::attribute_to_string(attr))).collect();
+        js["attrs"] = json::JsonValue::Array(v);
         js
     })
 }
