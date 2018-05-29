@@ -402,5 +402,13 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         },
         // XXX Macros definition/invocation ?
         _ => None,
-    }
+    }.map(|mut js| {
+        let s = match it.vis.node {
+            ast::VisibilityKind::Public => "public",
+            ast::VisibilityKind::Inherited => "",
+            _ => "",
+        };
+        js["visibility"] = json::JsonValue::String(s.to_owned());
+        js
+    })
 }
