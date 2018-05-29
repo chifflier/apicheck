@@ -51,11 +51,7 @@ fn fun_to_json(ident: &ast::Ident,
     //
     fun_js["abi"] = json::JsonValue::String(format!("{}",abi.name()));
     //
-    let s_gen = pprust::generic_params_to_string(&generics.params);
-    fun_js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&generics.where_clause);
-    fun_js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut fun_js, generics);
     //
     fun_js
 }
@@ -92,11 +88,7 @@ fn trait_to_json(ident: &ast::Ident,
     // add qualifiers
     js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
     //
-    let s_gen = pprust::generic_params_to_string(&generics.params);
-    js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&generics.where_clause);
-    js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut js, generics);
     // trait items
     let v : Vec<JsonValue> = traititems.iter().filter_map(|ref it| check_traititem(it)).collect();
     js["items"] = json::JsonValue::Array(v);
@@ -132,11 +124,8 @@ fn check_traititem(it: &ast::TraitItem) -> Option<JsonValue> {
         },
     }
     // generics
-    let s_gen = pprust::generic_params_to_string(&it.generics.params);
-    js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&it.generics.where_clause);
-    js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut js, &it.generics);
+    //
     Some(js)
 }
 
@@ -180,11 +169,7 @@ fn variantdata_to_json(ident: &ast::Ident, variantdata: &ast::VariantData, gener
     js["fields"] = json::JsonValue::Array(v);
     //
     // generics
-    let s_gen = pprust::generic_params_to_string(&generics.params);
-    js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&generics.where_clause);
-    js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut js, &generics);
     //
     js
 }
@@ -226,11 +211,7 @@ fn impl_to_json(ident: &ast::Ident,
     //
     js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
     // generics
-    let s_gen = pprust::generic_params_to_string(&generics.params);
-    js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&generics.where_clause);
-    js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut js, &generics);
     // implementation items
     let v : Vec<JsonValue> = implitems.iter().filter_map(|ref it| {
         if self_impl && it.vis.node != ast::VisibilityKind::Public { None }
@@ -270,11 +251,8 @@ fn check_implitem(it: &ast::ImplItem) -> Option<JsonValue> {
     };
     js["visibility"] = json::JsonValue::String(s.to_owned());
     // generics
-    let s_gen = pprust::generic_params_to_string(&it.generics.params);
-    js["generics"] = json::JsonValue::String(s_gen);
-    // where clause
-    let s_where = pprust::where_clause_to_string(&it.generics.where_clause);
-    js["where"] = json::JsonValue::String(s_where);
+    js_add_generics(&mut js, &it.generics);
+    //
     Some(js)
 }
 
@@ -368,12 +346,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             js["name"] = json::JsonValue::String(format!("{}",&it.ident));
             js["type"] = json::JsonValue::String("type".to_owned());
             js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
-            // generics
-            let s_gen = pprust::generic_params_to_string(&generics.params);
-            js["generics"] = json::JsonValue::String(s_gen);
-            // where clause
-            let s_where = pprust::where_clause_to_string(&generics.where_clause);
-            js["where"] = json::JsonValue::String(s_where);
+            js_add_generics(&mut js, &generics);
             Some(js)
         },
         ast::ItemKind::Struct(ref variantdata, ref generics) => {
@@ -429,4 +402,13 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         js["attrs"] = json::JsonValue::Array(v);
         js
     })
+}
+
+fn js_add_generics(js: &mut json::JsonValue, generics: &ast::Generics) {
+    // generics
+    let s_gen = pprust::generic_params_to_string(&generics.params);
+    js["generics"] = json::JsonValue::String(s_gen);
+    // where clause
+    let s_where = pprust::where_clause_to_string(&generics.where_clause);
+    js["where"] = json::JsonValue::String(s_where);
 }
