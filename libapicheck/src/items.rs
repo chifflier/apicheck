@@ -363,6 +363,19 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             if config.debug > 0 { println!("json: {}", fun_js.pretty(2)); }
             Some(fun_js)
         },
+        ast::ItemKind::Ty(ref ty, ref generics) => {
+            let mut js = json::JsonValue::new_object();
+            js["name"] = json::JsonValue::String(format!("{}",&it.ident));
+            js["type"] = json::JsonValue::String("type".to_owned());
+            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            // generics
+            let s_gen = pprust::generic_params_to_string(&generics.params);
+            js["generics"] = json::JsonValue::String(s_gen);
+            // where clause
+            let s_where = pprust::where_clause_to_string(&generics.where_clause);
+            js["where"] = json::JsonValue::String(s_where);
+            Some(js)
+        },
         ast::ItemKind::Struct(ref variantdata, ref generics) => {
             if config.debug > 2 { println!("Early pass, struct {:#?} {:#?}", variantdata, generics); }
             let mut js = variantdata_to_json(&it.ident, variantdata, generics);
