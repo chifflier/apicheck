@@ -21,12 +21,15 @@ use syntax::codemap::{CodeMap,FilePathMapping};
 use syntax::errors::{DiagnosticBuilder, Handler};
 use syntax::errors::emitter::ColorConfig;
 
+use std::fs::File;
+use std::io;
+
 pub(crate) mod process;
 pub(crate) mod items;
 pub(crate) mod modules;
 
 pub mod config;
-use config::Config;
+use config::{Config,FileName};
 
 use process::create_json_from_crate;
 pub use items::check_item;
@@ -81,12 +84,8 @@ fn process_file_inner(input: String, config: &Config) {
     };
 
     let result = create_json_from_crate(&krate, &mut parse_session, &config);
-    match result {
-        Ok(json) => {
-            println!("{}", json);
-        }
-        Err(e) => panic!("{:?}", e)
-    }
+    let json = result.expect("extracting JSON failed");
+    write_json(&json, &config.output).expect("writing JSON failed");
 }
 
 fn parse_input<'sess>(file: String, parse_session: &'sess ParseSess) -> Result<ast::Crate, ParseError<'sess>> {
@@ -110,4 +109,17 @@ fn parse_input<'sess>(file: String, parse_session: &'sess ParseSess) -> Result<a
         Ok(Err(e)) => Err(ParseError::Error(e)),
         Err(_) => Err(ParseError::Panic),
     }
+}
+
+fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(),io::Error> {
+    match &output {
+        FileName::Stdin => panic!("Cannot output to stdin"),
+        FileName::Stdout => println!("{}", js),
+        FileName::Real(path) => {
+            let mut file = File::create(path)?;
+            let mut buf_writer = io::BufWriter::new(file);
+            js.write(&mut buf_writer)?;
+        },
+    }
+    Ok(())
 }
