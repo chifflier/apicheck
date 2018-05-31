@@ -58,7 +58,7 @@ pub fn fun01() { }
 To extract the public API, run:
 
 ```shell
-cargo run apicheck -- -d ./tests/01.rs | tail -1 > 01.json
+cargo run apicheck -- ./tests/01.rs > 01.json
 ```
 
 Output is a single-line, compact JSON file.
@@ -67,7 +67,7 @@ To pretty-print it, your best friend is [jq](https://github.com/stedolan/jq)!
 See https://stedolan.github.io/jq/manual/#Basicfilters for more help
 
 ```shell
-$ cargo run apicheck -- -d ./tests/01.rs |tail -1 |jq
+$ cargo run apicheck -- ./tests/01.rs |jq
 ```
 ```json
 {
@@ -140,8 +140,8 @@ Extract the API again, and the arguments of `visible_function` will now differ:
 To check for differences, we can use a JSON diff tool, or even `diff` (after pretty-printing files):
 
 ```shell
-$ cargo run -- -d ./tests/01.rs |tail -1 | jq . > 01.json
-$ cargo run -- -d ./tests/02.rs |tail -1 | jq . > 02.json
+$ cargo run -- ./tests/01.rs jq . > 01.json
+$ cargo run -- ./tests/02.rs jq . > 02.json
 ```
 ```diff
 diff -u 01.json 02.json 
