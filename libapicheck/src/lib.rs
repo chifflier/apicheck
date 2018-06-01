@@ -23,6 +23,7 @@ use syntax::errors::emitter::ColorConfig;
 
 use std::fs::File;
 use std::io;
+use std::convert::From;
 
 pub(crate) mod process;
 pub(crate) mod items;
@@ -34,8 +35,21 @@ use config::{Config,FileName};
 use process::create_json_from_crate;
 pub use items::check_item;
 
+#[derive(Debug)]
+pub enum ApiCheckError<'a> {
+    ParseError(ParseError<'a>),
+    IoError(io::Error),
+}
+
+impl<'a> From<io::Error> for ApiCheckError<'a> {
+    fn from(e: io::Error) -> ApiCheckError<'a> {
+        ApiCheckError::IoError(e)
+    }
+}
+
 /// All the ways that parsing can fail.
-enum ParseError<'sess> {
+#[derive(Debug)]
+pub enum ParseError<'sess> {
     /// There was an error, but the parser recovered.
     Recovered,
     /// There was an error (supplied) and parsing failed.

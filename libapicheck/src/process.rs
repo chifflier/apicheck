@@ -1,27 +1,14 @@
 use syntax::ast;
 use syntax::parse::ParseSess;
 
-use std::io;
-use std::convert::From;
-
 use json::JsonValue;
 
 use items;
 use modules;
 use config::Config;
+use ::ApiCheckError;
 
-#[derive(Debug)]
-pub struct ApiCheckError {
-    _a: u32,
-}
-
-impl From<io::Error> for ApiCheckError {
-    fn from(e: io::Error) -> ApiCheckError {
-        ApiCheckError{ _a:0 }
-    }
-}
-
-pub fn create_json_from_crate(krate: &ast::Crate, parse_session: &mut ParseSess, config: &Config) -> Result<JsonValue,ApiCheckError> {
+pub fn create_json_from_crate<'a>(krate: &ast::Crate, parse_session: &mut ParseSess, config: &Config) -> Result<JsonValue,ApiCheckError<'a>> {
     let mut mod_v : Vec<JsonValue> = Vec::new();
     for (path, module) in modules::list_files(krate, parse_session.codemap())? {
         if config.debug > 0 { println!("Processing module {}", path); }
