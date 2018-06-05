@@ -134,7 +134,7 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRepor
     }
 }
 
-fn compare_modules(json1: &JsonValue, json2: &JsonValue, report: &mut DiffReport) {
+fn compare_modules(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
     for member in json1["items"].members() {
@@ -165,7 +165,7 @@ fn compare_modules(json1: &JsonValue, json2: &JsonValue, report: &mut DiffReport
         let js1 = hm1[m];
         let js2 = hm2[m];
         debug!("***");
-        if compare_items(js1, js2) {
+        if compare_items(js1, js2, &mut report) {
             changed = true;
             report.items_changed += 1;
         }
@@ -173,10 +173,13 @@ fn compare_modules(json1: &JsonValue, json2: &JsonValue, report: &mut DiffReport
     debug!("***");
     if changed {
         report.mods_changed += 1;
+        true
+    } else {
+        false
     }
 }
 
-fn compare_items(json1: &JsonValue, json2: &JsonValue) -> bool {
+fn compare_items(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
     let ty1 = &json1["type"];
     let ty2 = &json1["type"];
     if ty1 != ty2 {
@@ -187,6 +190,7 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue) -> bool {
         "function" => compare_fn(json1, json2),
         "struct"   => compare_struct(json1, json2),
         "enum"     => compare_struct(json1, json2),
+        "mod"      => compare_modules(json1, json2, &mut report),
         _e         => { warn!("unsupported item type '{}'", _e); false }
     }
 }
