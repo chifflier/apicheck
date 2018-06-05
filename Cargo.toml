@@ -8,6 +8,7 @@ authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 members = [
 	"libapicheck",
 	"apicheck_plugin",
+	"apidiff",
 ]
 
 [dependencies]
