@@ -191,8 +191,70 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRepo
         "struct"   => compare_struct(json1, json2),
         "enum"     => compare_struct(json1, json2),
         "mod"      => compare_modules(json1, json2, &mut report),
+        "trait"    => compare_traits(json1, json2, &mut report),
+        "method"   => compare_fn(json1, json2),
+        "impl"     => compare_impl(json1, json2, &mut report),
+        "type"     => compare_type(json1, json2),
         _e         => { warn!("unsupported item type '{}'", _e); false }
     }
+}
+
+const TRAITS_KEYS : &'static [&'static str] = &[
+    "type",
+    "typarambounds",
+    "unsafety",
+    "generics",
+    "where",
+    "visibility",
+    "attrs",
+];
+fn compare_traits(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+    let fname = match &json1["name"] {
+        &JsonValue::Short(ref s)  => s.as_str(),
+        &JsonValue::String(ref s) => s,
+        _e                       => {
+            warn!("json value has no 'name' attribute");
+            return true;
+        }
+    };
+    for key in TRAITS_KEYS {
+        if compare_key(json1, json2, fname, key) {
+            let it1 = &json1[*key];
+            let it2 = &json2[*key];
+            info!("Trait '{}': property '{}' has changed from '{}' to '{}'", fname, key, it1, it2);
+            return true;
+        }
+    }
+    compare_modules(json1, json2, &mut report)
+}
+
+const IMPL_KEYS : &'static [&'static str] = &[
+    "type",
+    "impl_type",
+    "unsafety",
+    "generics",
+    "where",
+    "visibility",
+    "attrs",
+];
+fn compare_impl(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+    let fname = match &json1["impl_type"] {
+        &JsonValue::Short(ref s)  => s.as_str(),
+        &JsonValue::String(ref s) => s,
+        _e                       => {
+            warn!("json value has no 'impl_type' attribute");
+            return true;
+        }
+    };
+    for key in IMPL_KEYS {
+        if compare_key(json1, json2, fname, key) {
+            let it1 = &json1[*key];
+            let it2 = &json2[*key];
+            info!("Impl '{}': property '{}' has changed from '{}' to '{}'", fname, key, it1, it2);
+            return true;
+        }
+    }
+    compare_modules(json1, json2, &mut report)
 }
 
 const FN_KEYS : &'static [&'static str] = &[
@@ -213,7 +275,7 @@ fn compare_fn(json1: &JsonValue, json2: &JsonValue) -> bool {
     let fname = match &json1["name"] {
         &JsonValue::Short(ref s)  => s.as_str(),
         &JsonValue::String(ref s) => s,
-        _e                       => { 
+        _e                       => {
             warn!("json value has no 'name' attribute");
             return true;
         }
@@ -243,7 +305,7 @@ fn compare_struct(json1: &JsonValue, json2: &JsonValue) -> bool {
     let fname = match &json1["name"] {
         &JsonValue::Short(ref s)  => s.as_str(),
         &JsonValue::String(ref s) => s,
-        _e                       => { 
+        _e                       => {
             warn!("json value has no 'name' attribute");
             return true;
         }
@@ -341,6 +403,42 @@ fn compare_structfields(json1: &JsonValue, json2: &JsonValue, ty: &str, name: &s
             let it1 = &json1[*key];
             let it2 = &json2[*key];
             info!("{} '{}': field '{}' has changed '{}' from '{}' to '{}'", ty, name, fname, key, it1, it2);
+            return true;
+        }
+    }
+    return false;
+}
+
+const TYPE_KEYS : &'static [&'static str] = &[
+    "type",
+    "subtype",
+    "generics",
+    "where",
+    "visibility",
+    "fields",
+    "attrs",
+];
+fn compare_type(json1: &JsonValue, json2: &JsonValue) -> bool {
+    // debug!("compare_struct:\n\t{:?}\n\t{:?}", json1, json2);
+    if !json1.is_object() || !json2.is_object() { return true; }
+    let fname = match &json1["name"] {
+        &JsonValue::Short(ref s)  => s.as_str(),
+        &JsonValue::String(ref s) => s,
+        _e                       => {
+            warn!("json value has no 'name' attribute");
+            return true;
+        }
+    };
+    for key in TYPE_KEYS {
+        /* if key == &"fields" {
+            if compare_fields(json1, json2, &fname) {
+                return true;
+            }
+        }
+        else */ if compare_key(json1, json2, fname, key) {
+            let it1 = &json1[*key];
+            let it2 = &json2[*key];
+            info!("TYPE '{}': property '{}' has changed from '{}' to '{}'", fname, key, it1, it2);
             return true;
         }
     }
