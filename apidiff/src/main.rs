@@ -195,6 +195,8 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRepo
         "method"   => compare_item_keys(json1, json2, FN_KEYS),
         "impl"     => compare_impl(json1, json2, &mut report),
         "type"     => compare_item_keys(json1, json2, TYPE_KEYS),
+        "const"    => compare_item_keys(json1, json2, CONST_KEYS),
+        "static"   => compare_item_keys(json1, json2, STATIC_KEYS),
         _e         => { warn!("unsupported item type '{}'", _e); false }
     }
 }
@@ -248,6 +250,21 @@ const STRUCT_KEYS : &'static [&'static str] = &[
     "where",
     "visibility",
     "fields",
+    "attrs",
+];
+
+const CONST_KEYS : &'static [&'static str] = &[
+    "type",
+    "subtype",
+    "visibility",
+    "attrs",
+];
+
+const STATIC_KEYS : &'static [&'static str] = &[
+    "type",
+    "mutability",
+    "subtype",
+    "visibility",
     "attrs",
 ];
 
