@@ -46,7 +46,7 @@ impl DiffReport {
 }
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
+    let brief = format!("Usage: {} [options] FILE1 FILE2", program);
     print!("{}", opts.usage(&brief));
 }
 
