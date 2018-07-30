@@ -25,5 +25,6 @@ pub fn create_json_from_crate<'a>(krate: &ast::Crate, parse_session: &mut ParseS
     }
     let mut json = JsonValue::new_object();
     json["modules"] = JsonValue::Array(mod_v);
+    // XXX add input name
     Ok(json)
 }
