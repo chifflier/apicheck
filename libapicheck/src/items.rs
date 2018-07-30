@@ -236,9 +236,9 @@ fn check_implitem(it: &ast::ImplItem) -> Option<JsonValue> {
             js["type"] = json::JsonValue::String("type".to_owned());
             js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
         },
-        ast::ImplItemKind::Existential(ref _bounds) => {
+        ast::ImplItemKind::Existential(ref bounds) => {
             js["type"] = json::JsonValue::from("existential");
-            // XXX generic bounds
+            js["bounds"] = json::JsonValue::String(pprust::bounds_to_string(&bounds));
         },
         ast::ImplItemKind::Macro(ref _mac) => {
             js["type"] = json::JsonValue::String("macro".to_owned());
@@ -292,6 +292,20 @@ fn usetree_to_json(ident: Option<ast::Ident>, usetree: &ast::UseTree) -> JsonVal
             js["kind"] = json::JsonValue::String("*".to_owned());
         },
     };
+    js
+}
+
+fn existential_to_json(ident: &ast::Ident, bounds: &ast::GenericBounds, generics: &ast::Generics) -> JsonValue {
+    let mut js = JsonValue::new_array();
+    //
+    js["name"] = json::JsonValue::String(format!("{}",ident));
+    js["type"] = json::JsonValue::from("existential");
+    //
+    js["bounds"] = json::JsonValue::String(pprust::bounds_to_string(&bounds));
+    //
+    // generics
+    js_add_generics(&mut js, &generics);
+    //
     js
 }
 
@@ -386,6 +400,11 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         },
         ast::ItemKind::Mod(ref m) => {
             mod_to_json(&it.ident, &it.vis.node, m, config)
+        },
+        ast::ItemKind::Existential(ref bounds, ref generics) => {
+            if config.debug > 2 { println!("Early pass, existential {:?}", &it.node) };
+            let js = existential_to_json(&it.ident, &bounds, generics);
+            Some(js)
         },
         // XXX Macros definition/invocation ?
         _ => None,
