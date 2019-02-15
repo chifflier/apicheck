@@ -17,7 +17,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use syntax::ast;
 use syntax::parse::ParseSess;
-use syntax::codemap::{CodeMap,FilePathMapping};
+use syntax::source_map::{SourceMap,FilePathMapping};
 use syntax::errors::{DiagnosticBuilder, Handler};
 use syntax::errors::emitter::ColorConfig;
 
@@ -64,7 +64,7 @@ pub fn process_file(input: String, config: &Config) {
 
 fn process_file_inner(input: String, config: &Config) {
     // build parsing session
-    let codemap = Rc::new(CodeMap::new(FilePathMapping::empty()));
+    let codemap = Rc::new(SourceMap::new(FilePathMapping::empty()));
     let tty_handler = {
         let supports_color = term::stderr().map_or(false, |term| term.supports_color());
         let color_cfg = if supports_color {

@@ -13,17 +13,17 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use syntax::ast;
-use syntax::codemap;
+use syntax::source_map;
 use syntax::parse::{parser, DirectoryOwnership};
 
 use config::FileName;
 // use utils::contains_skip;
 
-impl From<codemap::FileName> for FileName {
-    fn from(name: codemap::FileName) -> FileName {
+impl From<source_map::FileName> for FileName {
+    fn from(name: source_map::FileName) -> FileName {
         match name {
-            codemap::FileName::Real(p) => FileName::Real(p),
-            codemap::FileName::Custom(ref f) if f == "stdin" => FileName::Stdin,
+            source_map::FileName::Real(p) => FileName::Real(p),
+            source_map::FileName::Custom(ref f) if f == "stdin" => FileName::Stdin,
             _ => unreachable!(),
         }
     }
@@ -36,13 +36,13 @@ impl From<codemap::FileName> for FileName {
 /// If a file is used twice in a crate, it appears only once.
 pub fn list_files<'a>(
     krate: &'a ast::Crate,
-    codemap: &codemap::CodeMap,
+    codemap: &source_map::SourceMap,
 ) -> Result<BTreeMap<FileName, &'a ast::Mod>, io::Error> {
     let mut result = BTreeMap::new(); // Enforce file order determinism
     let root_filename = codemap.span_to_filename(krate.span);
     {
         let parent = match root_filename {
-            codemap::FileName::Real(ref path) => path.parent().unwrap(),
+            source_map::FileName::Real(ref path) => path.parent().unwrap(),
             _ => Path::new(""),
         };
         list_submodules(&krate.module, parent, None, codemap, &mut result)?;
@@ -56,7 +56,7 @@ fn list_submodules<'a>(
     module: &'a ast::Mod,
     search_dir: &Path,
     relative: Option<ast::Ident>,
-    codemap: &codemap::CodeMap,
+    codemap: &source_map::SourceMap,
     result: &mut BTreeMap<FileName, &'a ast::Mod>,
 ) -> Result<(), io::Error> {
     // debug!("list_submodules: search_dir: {:?}", search_dir);
@@ -87,7 +87,7 @@ fn module_file(
     attrs: &[ast::Attribute],
     dir_path: &Path,
     relative: Option<ast::Ident>,
-    codemap: &codemap::CodeMap,
+    codemap: &source_map::SourceMap,
 ) -> Result<(PathBuf, Option<ast::Ident>), io::Error> {
     if let Some(path) = parser::Parser::submod_path_from_attr(attrs, dir_path) {
         return Ok((path, None));

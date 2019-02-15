@@ -10,7 +10,7 @@ use ::ApiCheckError;
 
 pub fn create_json_from_crate<'a>(krate: &ast::Crate, parse_session: &mut ParseSess, config: &Config) -> Result<JsonValue,ApiCheckError<'a>> {
     let mut mod_v : Vec<JsonValue> = Vec::new();
-    for (path, module) in modules::list_files(krate, parse_session.codemap())? {
+    for (path, module) in modules::list_files(krate, parse_session.source_map())? {
         if config.debug > 0 { println!("Processing module {}", path); }
         let v : Vec<_> = module.items.iter().filter_map(|ref item| items::check_item(&item, &config)).collect();
         // println!("v: {:?}", v);
