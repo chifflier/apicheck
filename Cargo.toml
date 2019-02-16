@@ -14,3 +14,7 @@ members = [
 [dependencies]
 libapicheck = {path="libapicheck"}
 getopts = "0.2"
+
+[dev-dependencies]
+json = "0.11"
+pretty_assertions = "0.5.0"

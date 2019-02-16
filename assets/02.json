@@ -1,0 +1,42 @@
+{
+  "modules": [
+    {
+      "path": "./tests/02.rs",
+      "items": [
+        {
+          "type": "function",
+          "name": "visible_function",
+          "inputs": [
+            {
+              "type": "u32",
+              "name": "i"
+            }
+          ],
+          "output": "usize",
+          "variadic": false,
+          "unsafety": "normal",
+          "constness": "",
+          "abi": "Rust",
+          "generics": "",
+          "where": "",
+          "visibility": "public",
+          "attrs": []
+        },
+        {
+          "type": "function",
+          "name": "fun01",
+          "inputs": [],
+          "output": "",
+          "variadic": false,
+          "unsafety": "normal",
+          "constness": "",
+          "abi": "Rust",
+          "generics": "",
+          "where": "",
+          "visibility": "public",
+          "attrs": []
+        }
+      ]
+    }
+  ]
+}

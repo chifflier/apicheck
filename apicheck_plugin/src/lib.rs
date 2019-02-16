@@ -31,12 +31,16 @@ struct EarlyPass;
 struct LatePass;
 
 impl LintPass for LatePass {
+   fn name(&self) -> &'static str { "apicheck" }
+
    fn get_lints(&self) -> LintArray {
        lint_array!() // We'll get to this later, kind of...
    }
 }
 
 impl LintPass for EarlyPass {
+   fn name(&self) -> &'static str { "apicheck" }
+
    fn get_lints(&self) -> LintArray {
        lint_array!(TEST_LINT)
    }
