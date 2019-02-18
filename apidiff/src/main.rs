@@ -1,18 +1,22 @@
-extern crate getopts;
+extern crate clap;
+use clap::{Arg,App,crate_version};
+
 extern crate json;
 #[macro_use] extern crate log;
 extern crate env_logger;
 
-use getopts::Options;
 use json::JsonValue;
 use std::collections;
-use std::env;
 use std::fs;
 use std::str;
 use std::io::Read;
 
 mod error;
 use error::ApiDiffError;
+
+pub struct Config {
+    _verbose: bool,
+}
 
 pub struct DiffReport {
     pub mods_added: u32,
@@ -45,39 +49,39 @@ impl DiffReport {
     }
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options] FILE1 FILE2", program);
-    print!("{}", opts.usage(&brief));
-}
-
 fn main() {
     env_logger::init();
-    let args: Vec<String> = env::args().collect();
-    // process options
-    let mut opts = Options::new();
-    opts.optflag("h", "help", "print this help menu");
-    opts.optopt("o", "output", "output file name", "FILE");
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m)  => m,
-        Err(f) => panic!(f.to_string()),
+    let matches = App::new("Rust API diff helper tool")
+        .version(crate_version!())
+        .author("Pierre Chifflier")
+        .about("Compare API description files produced by apicheck")
+        .arg(Arg::with_name("verbose")
+             .help("Be verbose")
+             .short("v")
+             .long("verbose"))
+        .arg(Arg::with_name("FILE1")
+             .help("First file name")
+             .required(true)
+             .index(1))
+        .arg(Arg::with_name("FILE2")
+             .help("Second file name")
+             .required(true)
+             .index(2))
+        .get_matches();
+    let input1 = matches.value_of("FILE1").unwrap();
+    let input2 = matches.value_of("FILE2").unwrap();
+    let verbose = matches.is_present("verbose");
+
+    let config = Config {
+        _verbose: verbose,
     };
-    if matches.opt_present("h") {
-        print_usage(&args[0], opts);
-        return;
-    }
-    // setup config
-    let (input1,input2) = if matches.free.len() > 1 {
-        (matches.free[0].clone(),matches.free[1].clone())
-    } else {
-        print_usage(&args[0], opts);
-        return;
-    };
+
     // Work !
     let mut report = DiffReport::new();
     let json1 = read_json(&input1).unwrap();
     let json2 = read_json(&input2).unwrap();
     // XXX
-    let _ = compare_json(&json1, &json2, &mut report);
+    let _ = compare_json(&json1, &json2, &config, &mut report);
     show_report(&report);
 
     let rc = if report.has_changes() { 1 } else { 0 };
@@ -100,7 +104,7 @@ fn read_json(input: &str) -> Result<JsonValue,ApiDiffError> {
 
 
 
-fn compare_json(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) {
+fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) {
     // first insert modules in HashSet
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
@@ -130,11 +134,11 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRepor
     for m in h1.intersection(&h2) {
         let js1 = hm1[m];
         let js2 = hm2[m];
-        compare_modules(js1, js2, &mut report);
+        compare_modules(js1, js2, config, &mut report);
     }
 }
 
-fn compare_modules(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+fn compare_modules(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
     for member in json1["items"].members() {
@@ -165,7 +169,7 @@ fn compare_modules(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRe
         let js1 = hm1[m];
         let js2 = hm2[m];
         debug!("***");
-        if compare_items(js1, js2, &mut report) {
+        if compare_items(js1, js2, config, &mut report) {
             changed = true;
             report.items_changed += 1;
         }
@@ -179,7 +183,7 @@ fn compare_modules(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRe
     }
 }
 
-fn compare_items(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+fn compare_items(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
     let ty1 = &json1["type"];
     let ty2 = &json1["type"];
     if ty1 != ty2 {
@@ -190,10 +194,10 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffRepo
         "function" => compare_item_keys(json1, json2, FN_KEYS),
         "struct"   => compare_item_keys(json1, json2, STRUCT_KEYS),
         "enum"     => compare_item_keys(json1, json2, STRUCT_KEYS),
-        "mod"      => compare_modules(json1, json2, &mut report),
-        "trait"    => compare_traits(json1, json2, &mut report),
+        "mod"      => compare_modules(json1, json2, config, &mut report),
+        "trait"    => compare_traits(json1, json2, config, &mut report),
         "method"   => compare_item_keys(json1, json2, FN_KEYS),
-        "impl"     => compare_impl(json1, json2, &mut report),
+        "impl"     => compare_impl(json1, json2, config, &mut report),
         "type"     => compare_item_keys(json1, json2, TYPE_KEYS),
         "const"    => compare_item_keys(json1, json2, CONST_KEYS),
         "static"   => compare_item_keys(json1, json2, STATIC_KEYS),
@@ -210,9 +214,9 @@ const TRAITS_KEYS : &'static [&'static str] = &[
     "visibility",
     "attrs",
 ];
-fn compare_traits(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+fn compare_traits(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
     if compare_item_keys(json1, json2, TRAITS_KEYS) { return true; }
-    compare_modules(json1, json2, &mut report)
+    compare_modules(json1, json2, config, &mut report)
 }
 
 const IMPL_KEYS : &'static [&'static str] = &[
@@ -224,10 +228,10 @@ const IMPL_KEYS : &'static [&'static str] = &[
     "visibility",
     "attrs",
 ];
-fn compare_impl(json1: &JsonValue, json2: &JsonValue, mut report: &mut DiffReport) -> bool {
+fn compare_impl(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
     // XXX name of struct/union being implemented is in "impl_type" key
     if compare_item_keys(json1, json2, IMPL_KEYS) { return true; }
-    compare_modules(json1, json2, &mut report)
+    compare_modules(json1, json2, config, &mut report)
 }
 
 const FN_KEYS : &'static [&'static str] = &[
