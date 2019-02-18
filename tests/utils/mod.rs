@@ -53,6 +53,7 @@ pub fn run_diff_test(name1: &str, name2: &str, expected_rc: i32) -> error::Resul
     // test_index("slice_index", 1, "b", true, false);
     let wrk = workdir::Workdir::new("apidiff");
     let mut cmd = wrk.diff(test_source1.to_str().unwrap(), test_source2.to_str().unwrap());
+    cmd.arg("-p 10"); // do not compare file paths
     // cmd.arg("-o blah.json");
 
     let o = wrk.run(&mut cmd).expect("could not run diff tool");
