@@ -12,7 +12,7 @@ use std::time::Duration;
 // 
 // use Csv;
 
-static API_INTEGRATION_TEST_DIR: &'static str = "api";
+static API_INTEGRATION_TEST_DIR: &'static str = "integration_tests";
 
 static NEXT_ID: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
@@ -82,14 +82,19 @@ impl Workdir {
     //     Csv::from_vecs(records)
     // }
 
-    pub fn command(&self, sub_command: &str) -> process::Command {
+    pub fn check(&self, arg: &str) -> process::Command {
         let mut cmd = process::Command::new(&self.apicheck_bin());
-        cmd.current_dir(&self.dir).arg(sub_command);
+        cmd.current_dir(&self.dir).arg(arg);
+        cmd
+    }
+
+    pub fn diff(&self, arg1: &str, arg2: &str) -> process::Command {
+        let mut cmd = process::Command::new(&self.apidiff_bin());
+        cmd.current_dir(&self.dir).arg(arg1).arg(arg2);
         cmd
     }
 
     pub fn output(&self, cmd: &mut process::Command) -> process::Output {
-        println!("[{}]: {:?}", self.dir.display(), cmd);
         let o = cmd.output().unwrap();
         if !o.status.success() {
             panic!("\n\n===== {:?} =====\n\
@@ -105,8 +110,8 @@ impl Workdir {
         o
     }
 
-    pub fn run(&self, cmd: &mut process::Command) {
-        self.output(cmd);
+    pub fn run(&self, cmd: &mut process::Command) -> Result<process::Output,std::io::Error> {
+        cmd.output()
     }
 
     pub fn stdout<T: FromStr>(&self, cmd: &mut process::Command) -> T {
@@ -143,6 +148,10 @@ impl Workdir {
 
     pub fn apicheck_bin(&self) -> PathBuf {
         self.root.join("apicheck")
+    }
+
+    pub fn apidiff_bin(&self) -> PathBuf {
+        self.root.join("apidiff")
     }
 }
 
