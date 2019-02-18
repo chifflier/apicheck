@@ -16,6 +16,7 @@ use error::ApiDiffError;
 
 pub struct Config {
     _verbose: bool,
+    strip: usize,
 }
 
 pub struct DiffReport {
@@ -59,6 +60,11 @@ fn main() {
              .help("Be verbose")
              .short("v")
              .long("verbose"))
+        .arg(Arg::with_name("strip")
+             .help("Strip smallest prefix containing <num> directories")
+             .short("p")
+             .long("strip")
+             .takes_value(true))
         .arg(Arg::with_name("FILE1")
              .help("First file name")
              .required(true)
@@ -71,9 +77,15 @@ fn main() {
     let input1 = matches.value_of("FILE1").unwrap();
     let input2 = matches.value_of("FILE2").unwrap();
     let verbose = matches.is_present("verbose");
+    let strip = if let Some(s) = matches.value_of("strip") {
+        s.parse::<usize>().expect("strip level not an integer")
+    } else {
+        0
+    };
 
     let config = Config {
         _verbose: verbose,
+        strip,
     };
 
     // Work !
@@ -105,11 +117,17 @@ fn read_json(input: &str) -> Result<JsonValue,ApiDiffError> {
 
 
 fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) {
+    let strip = config.strip;
     // first insert modules in HashSet
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
     for member in json1["modules"].members() {
         let path = member["path"].as_str().unwrap();
+        let path = if strip > 0 {
+            path.splitn(strip+1, '/').skip(strip).last().unwrap()
+        } else {
+            path
+        };
         let obj = member;
         h1.insert(path);
         hm1.insert(path, obj);
@@ -118,6 +136,11 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     let mut hm2 = collections::HashMap::new();
     for member in json2["modules"].members() {
         let path = member["path"].as_str().unwrap();
+        let path = if strip > 0 {
+            path.splitn(strip+1, '/').skip(strip).last().unwrap()
+        } else {
+            path
+        };
         let obj = member;
         h2.insert(path);
         hm2.insert(path, obj);
