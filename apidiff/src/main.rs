@@ -124,7 +124,7 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     for member in json1["modules"].members() {
         let path = member["path"].as_str().unwrap();
         let path = if strip > 0 {
-            path.splitn(strip+1, '/').skip(strip).last().unwrap()
+            path.splitn(strip+1, '/').skip(strip).last().unwrap_or("")
         } else {
             path
         };
@@ -137,7 +137,7 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     for member in json2["modules"].members() {
         let path = member["path"].as_str().unwrap();
         let path = if strip > 0 {
-            path.splitn(strip+1, '/').skip(strip).last().unwrap()
+            path.splitn(strip+1, '/').skip(strip).last().unwrap_or("")
         } else {
             path
         };
