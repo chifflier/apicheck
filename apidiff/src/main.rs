@@ -78,7 +78,7 @@ fn main() {
     let input2 = matches.value_of("FILE2").unwrap();
     let verbose = matches.is_present("verbose");
     let strip = if let Some(s) = matches.value_of("strip") {
-        s.parse::<usize>().expect("strip level not an integer")
+        s.trim().parse::<usize>().expect("strip level not an integer")
     } else {
         0
     };
