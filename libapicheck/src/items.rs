@@ -27,7 +27,7 @@ fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     };
     fun_js["output"] = json::JsonValue::String(s);
     //
-    fun_js["variadic"] = json::JsonValue::Boolean(fndecl.variadic);
+    fun_js["variadic"] = json::JsonValue::Boolean(fndecl.c_variadic);
     //
     fun_js
 }
@@ -154,14 +154,14 @@ fn variantdata_to_json(ident: &ast::Ident, variantdata: &ast::VariantData, gener
     js["name"] = json::JsonValue::String(format!("{}",ident));
     //
     let v = match variantdata {
-        ast::VariantData::Struct(ref fields, _id) |
-            ast::VariantData::Tuple(ref fields, _id) => {
+        ast::VariantData::Struct(ref fields, _) |
+            ast::VariantData::Tuple(ref fields, _) => {
                 fields.iter().map(|ref f| {
                     structfield_to_json(&f.ident, &f)
                 }).collect()
             },
             // ast::VariantData::Tuple(ref _fields, _id) => vec![],
-        ast::VariantData::Unit(_id) => vec![],
+        ast::VariantData::Unit(_) => vec![],
     };
     js["fields"] = json::JsonValue::Array(v);
     //

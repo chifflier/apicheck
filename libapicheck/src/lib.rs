@@ -18,6 +18,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use syntax::ast;
 use syntax::parse::ParseSess;
 use syntax::source_map::{SourceMap,FilePathMapping};
+use syntax::source_map::edition::Edition;
 use syntax::errors::{DiagnosticBuilder, Handler};
 use syntax::errors::emitter::ColorConfig;
 
@@ -59,7 +60,7 @@ pub enum ParseError<'sess> {
 }
 
 pub fn process_file(input: String, config: &Config) {
-    syntax::with_globals(|| process_file_inner(input, &config))
+    syntax::with_globals(Edition::from_session(), || process_file_inner(input, &config))
 }
 
 fn process_file_inner(input: String, config: &Config) {
@@ -72,7 +73,7 @@ fn process_file_inner(input: String, config: &Config) {
         } else {
             ColorConfig::Never
         };
-        Handler::with_tty_emitter(color_cfg, true, false, Some(codemap.clone()))
+        Handler::with_tty_emitter(color_cfg, true, None, Some(codemap.clone()))
     };
     let mut parse_session = ParseSess::with_span_handler(tty_handler, codemap.clone());
     //
