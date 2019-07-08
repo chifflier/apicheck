@@ -224,6 +224,7 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repo
         "type"     => compare_item_keys(json1, json2, TYPE_KEYS),
         "const"    => compare_item_keys(json1, json2, CONST_KEYS),
         "static"   => compare_item_keys(json1, json2, STATIC_KEYS),
+        "usetree"  => compare_item_keys(json1, json2, USETREE_KEYS),
         _e         => { warn!("unsupported item type '{}'", _e); false }
     }
 }
@@ -412,6 +413,12 @@ fn compare_item_keys(json1: &JsonValue, json2: &JsonValue, keys: &[&str]) -> boo
     }
     return false;
 }
+
+const USETREE_KEYS : &'static [&'static str] = &[
+    "path",
+    "kind",
+    "visibility",
+];
 
 fn show_report(report: &DiffReport) {
     println!("Summary:");
