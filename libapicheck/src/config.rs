@@ -1,9 +1,12 @@
 use std::default::Default;
 use std::fmt;
 use std::path::PathBuf;
+use syntax::source_map::edition::Edition;
 
 pub struct Config {
     pub debug: usize,
+
+    pub edition: Edition,
 
     pub output: FileName,
 }
@@ -20,6 +23,7 @@ impl Default for Config {
     fn default() -> Config {
         Config{
             debug: 0,
+            edition: Edition::Edition2018,
             output: FileName::Stdout,
         }
     }
