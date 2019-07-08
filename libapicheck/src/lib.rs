@@ -131,7 +131,7 @@ fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(),io::Error> {
         FileName::Stdin => panic!("Cannot output to stdin"),
         FileName::Stdout => println!("{}", js),
         FileName::Real(path) => {
-            let mut file = File::create(path)?;
+            let file = File::create(path)?;
             let mut buf_writer = io::BufWriter::new(file);
             js.write(&mut buf_writer)?;
         },

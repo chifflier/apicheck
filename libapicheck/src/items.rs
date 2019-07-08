@@ -352,7 +352,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             Some(js)
         },
         ast::ItemKind::Fn(ref decl, ref header, generics, _block) => {
-            let mut fun_js = fun_to_json(&it.ident, &decl, header, &generics);
+            let fun_js = fun_to_json(&it.ident, &decl, header, &generics);
             if config.debug > 0 { println!("json: {}", fun_js.pretty(2)); }
             Some(fun_js)
         },
@@ -373,7 +373,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         },
         ast::ItemKind::Enum(ref enumdef, ref generics) => {
             if config.debug > 2 { println!("Early pass, enum {:#?} {:#?}", enumdef, generics); }
-            let mut js = enum_to_json(&it.ident, enumdef, generics);
+            let js = enum_to_json(&it.ident, enumdef, generics);
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
@@ -394,7 +394,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         },
         ast::ItemKind::Trait(isauto, unsafety, generics, genericbounds, traititems) => {
             if config.debug > 2 { println!("Early pass, trait {:?}", &it.node) };
-            let mut js = trait_to_json(&it.ident, &isauto, &unsafety, &generics, &genericbounds, &traititems);
+            let js = trait_to_json(&it.ident, &isauto, &unsafety, &generics, &genericbounds, &traititems);
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
