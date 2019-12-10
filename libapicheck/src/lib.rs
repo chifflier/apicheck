@@ -1,22 +1,15 @@
-#![feature(rustc_private)]
-
 extern crate term;
 extern crate json;
 
-extern crate rustc;
-extern crate rustc_plugin;
 extern crate syntax;
-extern crate syntax_pos;
-
-
 
 use std::path::Path;
 use std::rc::Rc;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use syntax::ast;
 use syntax::parse::ParseSess;
+use syntax::ast;
 use syntax::source_map::{SourceMap,FilePathMapping};
 use syntax::errors::{DiagnosticBuilder, Handler};
 use syntax::errors::emitter::ColorConfig;

@@ -12,9 +12,9 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use syntax::parse::{parser, DirectoryOwnership};
 use syntax::ast;
 use syntax::source_map;
-use syntax::parse::{parser, DirectoryOwnership};
 
 use config::FileName;
 // use utils::contains_skip;
@@ -61,7 +61,7 @@ fn list_submodules<'a>(
 ) -> Result<(), io::Error> {
     // debug!("list_submodules: search_dir: {:?}", search_dir);
     for item in &module.items {
-        if let ast::ItemKind::Mod(ref sub_mod) = item.node {
+        if let ast::ItemKind::Mod(ref sub_mod) = item.kind {
             { // if !contains_skip(&item.attrs) {
                 let is_internal =
                     codemap.span_to_filename(item.span) == codemap.span_to_filename(sub_mod.inner);
@@ -89,7 +89,7 @@ fn module_file(
     relative: Option<ast::Ident>,
     codemap: &source_map::SourceMap,
 ) -> Result<(PathBuf, Option<ast::Ident>), io::Error> {
-    if let Some(path) = parser::Parser::submod_path_from_attr(attrs, dir_path) {
+    if let Some(path) = syntax::parse::parser::Parser::submod_path_from_attr(attrs, dir_path) {
         return Ok((path, None));
     }
 

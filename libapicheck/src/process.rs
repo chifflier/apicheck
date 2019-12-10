@@ -1,5 +1,5 @@
-use syntax::ast;
 use syntax::parse::ParseSess;
+use syntax::ast;
 
 use json::JsonValue;
 
