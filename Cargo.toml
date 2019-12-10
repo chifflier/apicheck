@@ -7,7 +7,7 @@ authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 [workspace]
 members = [
 	"libapicheck",
-	"apicheck_plugin",
+	# "apicheck_plugin",
 	"apidiff",
 ]
 
