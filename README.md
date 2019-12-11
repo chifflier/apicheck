@@ -26,16 +26,7 @@ There are several tools:
 
 ## Calling apicheck
 
-Since `apicheck` uses features from the rust compiler, it is linked to shared libraries (especially `libstd-xxx.so`,
-
-`libsyntax_pos-xxx.so` and `librustc_errors-xxx.so`), which may not be in your PATH.
-
-Some solutions:
-
-Add the path to these libraries to the loader path:
-
 ```shell
-export LD_LIBRARY_PATH=`rustc --print sysroot`/lib/rustlib/x86_64-unknown-linux-gnu/lib
 apicheck tests/simple.rs
 ```
 
