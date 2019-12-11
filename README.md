@@ -18,7 +18,7 @@ it knows about the items.
 There are several tools:
 
 * `apicheck`: the main executable
-* `apicheck_plugin`: a compiler plugin to extract API
+* `apidiff`: a tool to compare to JSON files extracted by `apicheck`
 
 ## Building
 
@@ -158,6 +158,23 @@ diff -u 01.json 02.json
            "constness": "",
 ```
 
+The `apidiff` tool is still experimental, but it can check differences and exit with a non-zero code if found::
+
+```shell
+$ RUST_LOG=apidiff=debug ./target/debug/apidiff -v -p 3 ./assets/01.json ./assets/02.json
+DEBUG 2019-12-11T08:56:39Z: apidiff: ***
+ INFO 2019-12-11T08:56:39Z: apidiff: Item 'visible_function': property 'output' has changed from 'u32' to 'usize'
+DEBUG 2019-12-11T08:56:39Z: apidiff: ***
+DEBUG 2019-12-11T08:56:39Z: apidiff: ***
+Summary:
+    Modules added: 0
+    Modules removed: 0
+    Modules changed: 1
+    Items added: 0
+    Items removed: 0
+    Items changed: 1
+```
+
 ## Tips
 
 ### Sorting items
@@ -171,11 +188,26 @@ jq '(.. | arrays) |= sort' 02.json
 ```
 However, this may have side-effects, like changing the order of function arguments.
 
+### Modules stats
+
+`jq` can be used to show stats:
+
+```shell
+$ jq '[.modules[].items[].type] | sort[]' /tmp/libapicheck.rs | uniq -c
+      3 "enum"
+      4 "function"
+      4 "impl"
+      1 "mod"
+      1 "struct"
+      1 "usetree"
+```
+
 ## TODO
 
 Help needed!
 
-- [ ] write an `apidiff` tool to semantically diff JSONs
+- [x] write an `apidiff` tool to semantically diff JSONs (in progress)
+  - [ ] show differences
 - [ ] write a cargo subcommand
 
 ## Limitations
