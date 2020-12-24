@@ -3,12 +3,13 @@
 extern crate json;
 use json::JsonValue;
 
-use syntax::ast;
-use syntax::print::pprust;
+use rustc_ast::{ast, ptr};
+use rustc_ast_pretty::pprust;
+use rustc_span::symbol;
 
 use config::Config;
 
-fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
+fn fun_decl_to_json(ident: &symbol::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     let mut fun_js = JsonValue::new_array();
     //
     fun_js["type"] = json::JsonValue::String("function".to_owned());
@@ -24,8 +25,8 @@ fn fun_decl_to_json(ident: &ast::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     fun_js["inputs"] = args_js;
     //
     let s = match &fndecl.output {
-        ast::FunctionRetTy::Default(_) => "".to_owned(),
-        ast::FunctionRetTy::Ty(ty) => pprust::ty_to_string(&ty)
+        ast::FnRetTy::Default(_) => "".to_owned(),
+        ast::FnRetTy::Ty(ty) => pprust::ty_to_string(&ty)
     };
     fun_js["output"] = json::JsonValue::String(s);
     //
@@ -88,22 +89,34 @@ fn print_where_clause(where_clause: &ast::WhereClause) -> String {
     res
 }
 
-fn fun_to_json(ident: &ast::Ident,
+fn fun_to_json(ident: &symbol::Ident,
                fndecl: &ast::FnDecl,
                header: &ast::FnHeader,
                generics: &ast::Generics) -> JsonValue {
     // create initial json from function declaration
     let mut fun_js = fun_decl_to_json(&ident, &fndecl);
     // add qualifiers
-    fun_js["unsafety"] = json::JsonValue::String(format!("{}",header.unsafety));
-    let c = match &header.constness.node {
-        ast::Constness::Const => "const",
-        ast::Constness::NotConst => "",
+    let c = match &header.unsafety {
+        ast::Unsafe::Yes(_) => "yes",
+        ast::Unsafe::No => "",
     };
-    fun_js["constness"] = json::JsonValue::String(c.to_owned());
+    fun_js["unsafe"] = json::JsonValue::String(c.to_owned());
+    let c = match &header.constness {
+        ast::Const::Yes(_) => "yes",
+        ast::Const::No => "",
+    };
+    fun_js["const"] = json::JsonValue::String(c.to_owned());
     //
     // XXX abi was renamed to extern
-    fun_js["abi"] = json::JsonValue::String(format!("{}",header.abi.name()));
+    match &header.ext {
+        ast::Extern::Explicit(s) => {
+            let s = s.symbol.to_ident_string(); // XXX is this correct?
+            fun_js["abi"] = json::JsonValue::String(s);
+        },
+        ast::Extern::Implicit | ast::Extern::None => {
+            fun_js["abi"] = json::JsonValue::String("".to_owned());
+        },
+    };
     // fun_js["extern"] = json::JsonValue::String(format!("{}", extern_to_string(&header.ext)));
     //
     // XXX asyncness
@@ -113,12 +126,12 @@ fn fun_to_json(ident: &ast::Ident,
     fun_js
 }
 
-fn trait_to_json(ident: &ast::Ident,
+fn trait_to_json(ident: &symbol::Ident,
                  _isauto: &ast::IsAuto,
-                 unsafety: &ast::Unsafety,
+                 unsafety: &ast::Unsafe,
                  generics: &ast::Generics,
                  genericbounds: &ast::GenericBounds,
-                 traititems: &Vec<ast::TraitItem>) -> JsonValue {
+                 traititems: &Vec<ptr::P<ast::AssocItem>>) -> JsonValue {
     let mut js = json::JsonValue::new_object();
     //
     js["name"] = json::JsonValue::String(format!("{}",ident));
@@ -144,7 +157,11 @@ fn trait_to_json(ident: &ast::Ident,
     }).collect();
     js["typarambounds"] = json::JsonValue::Array(v);
     // add qualifiers
-    js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
+    let c = match unsafety {
+        ast::Unsafe::Yes(_) => "yes",
+        ast::Unsafe::No => "",
+    };
+    js["unsafe"] = json::JsonValue::String(c.to_owned());
     //
     js_add_generics(&mut js, generics);
     // trait items
@@ -154,20 +171,21 @@ fn trait_to_json(ident: &ast::Ident,
     js
 }
 
-fn check_traititem(it: &ast::TraitItem) -> Option<JsonValue> {
+fn check_traititem(it: &ast::AssocItem) -> Option<JsonValue> {
     let mut js = json::JsonValue::new_object();
     js["name"] = json::JsonValue::String(format!("{}",&it.ident));
     match &it.kind {
-        ast::TraitItemKind::Const(ref ty, _) => {
+        ast::AssocItemKind::Const(_, ref ty, _) => {
             js["type"] = json::JsonValue::String("const".to_owned());
             js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
         },
-        ast::TraitItemKind::Method(ref sig, _) => {
+        ast::AssocItemKind::Fn(_, ref sig, ref generics, _) => {
             // shadow previous js
-            js = fun_to_json(&it.ident, &sig.decl, &sig.header, &it.generics);
+            js = fun_to_json(&it.ident, &sig.decl, &sig.header, generics);
             js["type"] = json::JsonValue::String("method".to_owned());
+            js_add_generics(&mut js, generics);
         },
-        ast::TraitItemKind::Type(_, ref ty) => {
+        ast::AssocItemKind::TyAlias(_, generics, _, ref ty) => {
             js["type"] = json::JsonValue::String("type".to_owned());
             match ty {
                 Some(ref ty) => {
@@ -175,19 +193,20 @@ fn check_traititem(it: &ast::TraitItem) -> Option<JsonValue> {
                 },
                 None => (), // XXX a type without type ?!
             }
+            js_add_generics(&mut js, generics);
         },
-        ast::TraitItemKind::Macro(ref _mac) => {
+        ast::AssocItemKind::MacCall(ref _mac) => {
             js["type"] = json::JsonValue::String("macro".to_owned());
             // XXX macro invocation ?
         },
     }
-    // generics
-    js_add_generics(&mut js, &it.generics);
+    // generics // XXX moved to Fn and TyAlias variants
+    // js_add_generics(&mut js, &it.generics);
     //
     Some(js)
 }
 
-fn structfield_to_json(ident: &Option<ast::Ident>, field: &ast::StructField) -> JsonValue {
+fn structfield_to_json(ident: &Option<symbol::Ident>, field: &ast::StructField) -> JsonValue {
     let mut js = JsonValue::new_array();
     //
     let name = match ident {
@@ -198,7 +217,7 @@ fn structfield_to_json(ident: &Option<ast::Ident>, field: &ast::StructField) -> 
     //
     js["type"] = json::JsonValue::String(pprust::ty_to_string(&field.ty));
     //
-    let s = match field.vis.node {
+    let s = match field.vis.kind {
         ast::VisibilityKind::Public => "public",
         ast::VisibilityKind::Inherited => "",
         _ => "",
@@ -209,7 +228,7 @@ fn structfield_to_json(ident: &Option<ast::Ident>, field: &ast::StructField) -> 
     js
 }
 
-fn variantdata_to_json(ident: &ast::Ident, variantdata: &ast::VariantData, generics: &ast::Generics) -> JsonValue {
+fn variantdata_to_json(ident: &symbol::Ident, variantdata: &ast::VariantData, generics: &ast::Generics) -> JsonValue {
     let mut js = JsonValue::new_array();
     //
     js["name"] = json::JsonValue::String(format!("{}",ident));
@@ -232,7 +251,7 @@ fn variantdata_to_json(ident: &ast::Ident, variantdata: &ast::VariantData, gener
     js
 }
 
-fn enum_to_json(ident: &ast::Ident, enumdef: &ast::EnumDef, generics: &ast::Generics) -> JsonValue {
+fn enum_to_json(ident: &symbol::Ident, enumdef: &ast::EnumDef, generics: &ast::Generics) -> JsonValue {
     let mut js = JsonValue::new_array();
     js["type"] = json::JsonValue::String("enum".to_owned());
     //
@@ -245,14 +264,14 @@ fn enum_to_json(ident: &ast::Ident, enumdef: &ast::EnumDef, generics: &ast::Gene
     js
 }
 
-fn impl_to_json(ident: &ast::Ident,
-                unsafety: &ast::Unsafety,
+fn impl_to_json(ident: &symbol::Ident,
+                unsafety: &ast::Unsafe,
                 _polarity: &ast::ImplPolarity,
                 _default: &ast::Defaultness,
                 traitref: &Option<ast::TraitRef>,
                 ty: &ast::Ty,
                 generics: &ast::Generics,
-                implitems: &Vec<ast::ImplItem>) -> JsonValue {
+                implitems: &Vec<ptr::P<ast::AssocItem>>) -> JsonValue {
     let mut js = JsonValue::new_array();
     js["type"] = json::JsonValue::String("impl".to_owned());
     //
@@ -267,12 +286,16 @@ fn impl_to_json(ident: &ast::Ident,
     };
     js["trait"] = json::JsonValue::String(thetrait);
     //
-    js["unsafety"] = json::JsonValue::String(format!("{}",unsafety));
+    let c = match unsafety {
+        ast::Unsafe::Yes(_) => "yes",
+        ast::Unsafe::No => "",
+    };
+    js["unsafe"] = json::JsonValue::String(c.to_owned());
     // generics
     js_add_generics(&mut js, &generics);
     // implementation items
     let v : Vec<JsonValue> = implitems.iter().filter_map(|ref it| {
-        if self_impl && ! it.vis.node.is_pub() { None }
+        if self_impl && ! it.vis.kind.is_pub() { None }
         else { check_implitem(it) }
     }).collect();
     js["items"] = json::JsonValue::Array(v);
@@ -280,50 +303,54 @@ fn impl_to_json(ident: &ast::Ident,
     js
 }
 
-fn check_implitem(it: &ast::ImplItem) -> Option<JsonValue> {
+fn check_implitem(it: &ast::AssocItem) -> Option<JsonValue> {
     let mut js = json::JsonValue::new_object();
     js["name"] = json::JsonValue::String(format!("{}",&it.ident));
     match &it.kind {
-        ast::ImplItemKind::Const(ref ty, _) => {
+        ast::AssocItemKind::Const(_, ref ty, _) => {
             js["type"] = json::JsonValue::String("const".to_owned());
             js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
         },
-        ast::ImplItemKind::Method(ref sig, _) => {
+        ast::AssocItemKind::Fn(_, ref sig, ref generics, _) => {
             // shadow previous js
-            js = fun_to_json(&it.ident, &sig.decl, &sig.header, &it.generics);
+            js = fun_to_json(&it.ident, &sig.decl, &sig.header, generics);
             js["type"] = json::JsonValue::String("method".to_owned());
+            js_add_generics(&mut js, generics);
         },
-        ast::ImplItemKind::TyAlias(ref ty) => {
+        ast::AssocItemKind::TyAlias(_, generics, _, opt_ty) => {
             js["type"] = json::JsonValue::String("type".to_owned());
-            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            if let Some(ty) = opt_ty.as_ref() {
+                js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            }
+            js_add_generics(&mut js, generics);
         },
-        ast::ImplItemKind::OpaqueTy(ref bounds) => {
-            js["type"] = json::JsonValue::String("opaque_type".to_owned());
-            // XXX js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
-            js["bounds"] = json::JsonValue::String(pprust::bounds_to_string(&bounds));
-        },
-        // ast::ImplItemKind::Existential(ref bounds) => {
+        // ast::AssocItemKind::OpaqueTy(ref bounds) => {
+        //     js["type"] = json::JsonValue::String("opaque_type".to_owned());
+        //     // XXX js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+        //     js["bounds"] = json::JsonValue::String(pprust::bounds_to_string(&bounds));
+        // },
+        // ast::AssocItemKind::Existential(ref bounds) => {
         //     js["type"] = json::JsonValue::from("existential");
         //     js["bounds"] = json::JsonValue::String(pprust::bounds_to_string(&bounds));
         // },
-        ast::ImplItemKind::Macro(ref _mac) => {
+        ast::AssocItemKind::MacCall(ref _mac) => {
             js["type"] = json::JsonValue::String("macro".to_owned());
             // XXX macro invocation ?
         },
     }
-    let s = match &it.vis.node {
+    let s = match &it.vis.kind {
         ast::VisibilityKind::Public => "public",
         ast::VisibilityKind::Inherited => "",
         _ => "",
     };
     js["visibility"] = json::JsonValue::String(s.to_owned());
-    // generics
-    js_add_generics(&mut js, &it.generics);
+    // generics // XXX moved to AssocItemKind variants
+    // js_add_generics(&mut js, &it.generics);
     //
     Some(js)
 }
 
-fn mod_to_json(ident: &ast::Ident, vis: &ast::VisibilityKind, m: &ast::Mod, config: &Config) -> Option<JsonValue> {
+fn mod_to_json(ident: &symbol::Ident, vis: &ast::VisibilityKind, m: &ast::Mod, config: &Config) -> Option<JsonValue> {
     if ! vis.is_pub() { return None; }
     let mut js = json::JsonValue::new_object();
     js["name"] = json::JsonValue::String(format!("{}",ident));
@@ -333,7 +360,7 @@ fn mod_to_json(ident: &ast::Ident, vis: &ast::VisibilityKind, m: &ast::Mod, conf
     Some(js)
 }
 
-fn usetree_to_json(ident: Option<ast::Ident>, usetree: &ast::UseTree) -> JsonValue {
+fn usetree_to_json(ident: Option<symbol::Ident>, usetree: &ast::UseTree) -> JsonValue {
     let mut js = json::JsonValue::new_object();
     match ident {
         Some(ident) => js["name"] = json::JsonValue::String(format!("{}",ident)),
@@ -379,9 +406,9 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
     // handle some specific item types
     match &it.kind {
         // impl items are not marked public
-        ast::ItemKind::Impl(_,_,_,_,_,_,_) => (),
+        ast::ItemKind::Impl{..} => (),
         _ => {
-            match &it.vis.node {
+            match &it.vis.kind {
                 ast::VisibilityKind::Public => (),
                 _ => {
                     if config.debug > 0 { println!("skipping item '{}', not public", it.ident); }
@@ -398,7 +425,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             let js = usetree_to_json(Some(it.ident), usetree);
             Some(js)
         },
-        ast::ItemKind::Const(ref ty, _) => {
+        ast::ItemKind::Const(_, ty, _) => {
             let mut js = json::JsonValue::new_object();
             js["name"] = json::JsonValue::String(format!("{}",&it.ident));
             js["type"] = json::JsonValue::String("const".to_owned());
@@ -410,24 +437,26 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             js["name"] = json::JsonValue::String(format!("{}",&it.ident));
             js["type"] = json::JsonValue::String("static".to_owned());
             let s = match mutability {
-                ast::Mutability::Mutable => "mut",
-                ast::Mutability::Immutable => ""
+                ast::Mutability::Mut => "mut",
+                ast::Mutability::Not => ""
             };
             js["mutability"] = json::JsonValue::String(s.to_owned());
             js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
             Some(js)
         },
-        ast::ItemKind::Fn(ref decl, ref header, generics, _block) => {
+        ast::ItemKind::Fn(_, sig, generics, _block) => {
         // XXX ast::ItemKind::Fn(ref sig, generics, _block) => {
-            let fun_js = fun_to_json(&it.ident, decl, header, &generics);
+            let fun_js = fun_to_json(&it.ident, &sig.decl, &sig.header, &generics);
             if config.debug > 0 { println!("json: {}", fun_js.pretty(2)); }
             Some(fun_js)
         },
-        ast::ItemKind::TyAlias(ref ty, ref generics) => {
+        ast::ItemKind::TyAlias(_, generics, _, opt_ty) => {
             let mut js = json::JsonValue::new_object();
             js["name"] = json::JsonValue::String(format!("{}",&it.ident));
             js["type"] = json::JsonValue::String("type".to_owned());
-            js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            if let Some(ty) = opt_ty.as_ref() {
+                js["subtype"] = json::JsonValue::String(pprust::ty_to_string(&ty));
+            }
             js_add_generics(&mut js, &generics);
             Some(js)
         },
@@ -452,9 +481,9 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
         },
-        ast::ItemKind::Impl(unsafety, polarity, default, generics, traitref, ty, implitems) => {
+        ast::ItemKind::Impl{unsafety, polarity, defaultness, constness, generics, of_trait, self_ty, items} => {
             if config.debug > 2 { println!("Early pass, impl {:?}", &it.kind) };
-            let mut js = impl_to_json(&it.ident, unsafety, polarity, default, &traitref, &ty, generics, implitems);
+            let mut js = impl_to_json(&it.ident, unsafety, polarity, defaultness, &of_trait, &self_ty, generics, items);
             js["type"] = json::JsonValue::String("impl".to_owned());
             if config.debug > 0 { println!("json: {}", js.pretty(2)); }
             Some(js)
@@ -466,7 +495,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
             Some(js)
         },
         ast::ItemKind::Mod(ref m) => {
-            mod_to_json(&it.ident, &it.vis.node, m, config)
+            mod_to_json(&it.ident, &it.vis.kind, m, config)
         },
         // ast::ItemKind::Existential(ref bounds, ref generics) => {
         //     if config.debug > 2 { println!("Early pass, existential {:?}", &it.node) };
@@ -477,7 +506,7 @@ pub fn check_item(it: &ast::Item, config: &Config) -> Option<JsonValue> {
         _ => None,
     }.map(|mut js| {
         // visibility
-        let s = match it.vis.node {
+        let s = match it.vis.kind {
             ast::VisibilityKind::Public => "public",
             ast::VisibilityKind::Inherited => "",
             _ => "",

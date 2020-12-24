@@ -1,18 +1,25 @@
-extern crate term;
 extern crate json;
+extern crate term;
+extern crate thiserror;
 
-extern crate syntax;
+extern crate rustc_ast;
+extern crate rustc_ast_pretty;
+extern crate rustc_errors;
+extern crate rustc_expand;
+extern crate rustc_parse;
+extern crate rustc_session;
+extern crate rustc_span;
 
 use std::path::Path;
 use std::rc::Rc;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use syntax::parse::ParseSess;
-use syntax::ast;
-use syntax::source_map::{SourceMap,FilePathMapping};
-use syntax::errors::{DiagnosticBuilder, Handler};
-use syntax::errors::emitter::ColorConfig;
+use rustc_session::parse::ParseSess;
+use rustc_ast::ast;
+use rustc_span::source_map::{SourceMap,FilePathMapping};
+use rustc_errors::{DiagnosticBuilder, Handler};
+use rustc_errors::emitter::ColorConfig;
 
 use std::fs::File;
 use std::io;
@@ -52,7 +59,7 @@ pub enum ParseError<'sess> {
 }
 
 pub fn process_file(input: String, config: &Config) {
-    syntax::with_globals(config.edition, || process_file_inner(input, &config))
+    rustc_span::with_session_globals(config.edition, || process_file_inner(input, &config))
 }
 
 fn process_file_inner(input: String, config: &Config) {
@@ -98,9 +105,9 @@ fn process_file_inner(input: String, config: &Config) {
 fn parse_input<'sess>(file: String, parse_session: &'sess ParseSess) -> Result<ast::Crate, ParseError<'sess>> {
     //
     let file = Path::new(&file);
-    let mut parser = syntax::parse::new_parser_from_file(&parse_session, &file);
+    let mut parser = rustc_parse::new_parser_from_file(&parse_session, &file, None);
 
-    parser.cfg_mods = false;
+    // XXX parser.cfg_mods = false;
     let mut parser = AssertUnwindSafe(parser);
     let result = catch_unwind(move || parser.0.parse_crate_mod());
 

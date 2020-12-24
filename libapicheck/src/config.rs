@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::fmt;
 use std::path::PathBuf;
-use syntax::source_map::edition::Edition;
+use rustc_span::source_map::edition::Edition;
 
 pub struct Config {
     pub debug: usize,

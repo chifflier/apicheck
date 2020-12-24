@@ -24,6 +24,12 @@ There are several tools:
 
 `apicheck` uses nightly features, so you must use the nightly compiler.
 
+```
+export CFG_RELEASE_CHANNEL=nightly
+export CFG_RELEASE=nightly
+cargo +nightly build --all
+```
+
 ## Calling apicheck
 
 ```shell
@@ -33,7 +39,7 @@ apicheck tests/simple.rs
 Or, use `cargo run` as a prefix to your command:
 
 ```shell
-cargo run apicheck -- tests/simple.rs
+cargo run --bin apicheck -- tests/simple.rs
 ```
 
 ## Example

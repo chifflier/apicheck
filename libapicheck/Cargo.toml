@@ -6,7 +6,32 @@ authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 [dependencies]
 term = "0.5"
 json = "0.11"
+thiserror = "1.0"
 
-[dependencies.syntax]
-package = "rustc-ap-syntax"
-version = "610.0.0"
+[dependencies.rustc_ast]
+package = "rustc-ap-rustc_ast"
+version = "691.0.0"
+
+[dependencies.rustc_ast_pretty]
+package = "rustc-ap-rustc_ast_pretty"
+version = "691.0.0"
+
+[dependencies.rustc_errors]
+package = "rustc-ap-rustc_errors"
+version = "691.0.0"
+
+[dependencies.rustc_expand]
+package = "rustc-ap-rustc_expand"
+version = "691.0.0"
+
+[dependencies.rustc_parse]
+package = "rustc-ap-rustc_parse"
+version = "691.0.0"
+
+[dependencies.rustc_session]
+package = "rustc-ap-rustc_session"
+version = "691.0.0"
+
+[dependencies.rustc_span]
+package = "rustc-ap-rustc_span"
+version = "691.0.0"
