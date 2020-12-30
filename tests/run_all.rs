@@ -12,6 +12,7 @@ fn apicheck_run_all() {
     utils::run_check_test("03").expect("test 03");
     utils::run_check_test("04").expect("test 04");
     utils::run_check_test("05").expect("test 05");
+    utils::run_check_test("async").expect("test async");
     utils::run_check_test("const_fn").expect("test const_fn");
     utils::run_check_test("enums_01").expect("test enums_01");
     utils::run_check_test("enums_02").expect("test enums_02");

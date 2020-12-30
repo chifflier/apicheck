@@ -117,7 +117,13 @@ fn fun_to_json(
     let s = extern_to_string(&header.ext);
     fun_js["extern"] = json::JsonValue::String(s);
     //
-    // XXX asyncness
+    // asyncness
+    //
+    let b = match &header.asyncness {
+        ast::Async::Yes { .. } => true,
+        ast::Async::No => false,
+    };
+    fun_js["async"] = json::JsonValue::Boolean(b);
     //
     js_add_generics(&mut fun_js, generics);
     //

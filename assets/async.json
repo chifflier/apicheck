@@ -1,0 +1,1 @@
+{"modules":[{"path":"./assets/async.rs","items":[{"type":"function","name":"hello_world","inputs":[],"output":"","variadic":false,"unsafe":false,"const":false,"extern":"","async":true,"generics":"","where":"","visibility":"public","attrs":[]}]}]}
