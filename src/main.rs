@@ -22,7 +22,7 @@ fn main() {
     opts.optflag("h", "help", "print this help menu");
     opts.optopt("o", "output", "output file name", "FILE");
     let matches = match opts.parse(&args[1..]) {
-        Ok(m)  => m,
+        Ok(m) => m,
         Err(f) => panic!(f.to_string()),
     };
     if matches.opt_present("h") {
@@ -34,10 +34,13 @@ fn main() {
     config.debug = matches.opt_count("d");
     config.output = match matches.opt_str("o") {
         Some(s) => {
-            if &s == "-" { FileName::Stdout }
-            else { FileName::Real(PathBuf::from(s.clone())) }
-        },
-        None    => FileName::Stdout,
+            if &s == "-" {
+                FileName::Stdout
+            } else {
+                FileName::Real(PathBuf::from(s.clone()))
+            }
+        }
+        None => FileName::Stdout,
     };
     let input = if !matches.free.is_empty() {
         matches.free[0].clone()
@@ -46,7 +49,9 @@ fn main() {
         return;
     };
     // work !
-    if config.debug > 0 { println!("Processing file {}", input); }
+    if config.debug > 0 {
+        println!("Processing file {}", input);
+    }
     let input = Input::File(PathBuf::from(input));
     libapicheck::process_file(input, &config);
 }

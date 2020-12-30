@@ -1,15 +1,16 @@
 extern crate clap;
-use clap::{Arg,App,crate_version};
+use clap::{crate_version, App, Arg};
 
 extern crate json;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate env_logger;
 
 use json::JsonValue;
 use std::collections;
 use std::fs;
-use std::str;
 use std::io::Read;
+use std::str;
 
 mod error;
 use error::ApiDiffError;
@@ -30,23 +31,23 @@ pub struct DiffReport {
 
 impl DiffReport {
     pub fn new() -> DiffReport {
-        DiffReport{
-            mods_added:0,
-            mods_removed:0,
-            mods_changed:0,
-            items_added:0,
-            items_removed:0,
-            items_changed:0,
+        DiffReport {
+            mods_added: 0,
+            mods_removed: 0,
+            mods_changed: 0,
+            items_added: 0,
+            items_removed: 0,
+            items_changed: 0,
         }
     }
 
     pub fn has_changes(&self) -> bool {
-        self.mods_added != 0 ||
-        self.mods_removed != 0 ||
-        self.mods_changed != 0 ||
-        self.items_added != 0 ||
-        self.items_removed != 0 ||
-        self.items_changed != 0
+        self.mods_added != 0
+            || self.mods_removed != 0
+            || self.mods_changed != 0
+            || self.items_added != 0
+            || self.items_removed != 0
+            || self.items_changed != 0
     }
 }
 
@@ -56,29 +57,39 @@ fn main() {
         .version(crate_version!())
         .author("Pierre Chifflier")
         .about("Compare API description files produced by apicheck")
-        .arg(Arg::with_name("verbose")
-             .help("Be verbose")
-             .short("v")
-             .long("verbose"))
-        .arg(Arg::with_name("strip")
-             .help("Strip smallest prefix containing <num> directories")
-             .short("p")
-             .long("strip")
-             .takes_value(true))
-        .arg(Arg::with_name("FILE1")
-             .help("First file name")
-             .required(true)
-             .index(1))
-        .arg(Arg::with_name("FILE2")
-             .help("Second file name")
-             .required(true)
-             .index(2))
+        .arg(
+            Arg::with_name("verbose")
+                .help("Be verbose")
+                .short("v")
+                .long("verbose"),
+        )
+        .arg(
+            Arg::with_name("strip")
+                .help("Strip smallest prefix containing <num> directories")
+                .short("p")
+                .long("strip")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("FILE1")
+                .help("First file name")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("FILE2")
+                .help("Second file name")
+                .required(true)
+                .index(2),
+        )
         .get_matches();
     let input1 = matches.value_of("FILE1").unwrap();
     let input2 = matches.value_of("FILE2").unwrap();
     let verbose = matches.is_present("verbose");
     let strip = if let Some(s) = matches.value_of("strip") {
-        s.trim().parse::<usize>().expect("strip level not an integer")
+        s.trim()
+            .parse::<usize>()
+            .expect("strip level not an integer")
     } else {
         0
     };
@@ -100,9 +111,8 @@ fn main() {
     ::std::process::exit(rc);
 }
 
-fn read_json(input: &str) -> Result<JsonValue,ApiDiffError> {
-    let mut f = fs::OpenOptions::new().read(true)
-                                      .open(input)?;
+fn read_json(input: &str) -> Result<JsonValue, ApiDiffError> {
+    let mut f = fs::OpenOptions::new().read(true).open(input)?;
 
     let sz = f.metadata().map(|m| m.len() as usize + 1)?;
     let mut bytes = Vec::with_capacity(sz);
@@ -114,9 +124,12 @@ fn read_json(input: &str) -> Result<JsonValue,ApiDiffError> {
     Ok(json)
 }
 
-
-
-fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) {
+fn compare_json(
+    json1: &JsonValue,
+    json2: &JsonValue,
+    config: &Config,
+    mut report: &mut DiffReport,
+) {
     let strip = config.strip;
     // first insert modules in HashSet
     let mut h1 = collections::HashSet::new();
@@ -124,7 +137,7 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     for member in json1["modules"].members() {
         let path = member["path"].as_str().unwrap();
         let path = if strip > 0 {
-            path.splitn(strip+1, '/').skip(strip).last().unwrap_or("")
+            path.splitn(strip + 1, '/').skip(strip).last().unwrap_or("")
         } else {
             path
         };
@@ -137,7 +150,7 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     for member in json2["modules"].members() {
         let path = member["path"].as_str().unwrap();
         let path = if strip > 0 {
-            path.splitn(strip+1, '/').skip(strip).last().unwrap_or("")
+            path.splitn(strip + 1, '/').skip(strip).last().unwrap_or("")
         } else {
             path
         };
@@ -161,7 +174,12 @@ fn compare_json(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repor
     }
 }
 
-fn compare_modules(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
+fn compare_modules(
+    json1: &JsonValue,
+    json2: &JsonValue,
+    config: &Config,
+    mut report: &mut DiffReport,
+) -> bool {
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
     for member in json1["items"].members() {
@@ -206,7 +224,12 @@ fn compare_modules(json1: &JsonValue, json2: &JsonValue, config: &Config, mut re
     }
 }
 
-fn compare_items(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
+fn compare_items(
+    json1: &JsonValue,
+    json2: &JsonValue,
+    config: &Config,
+    mut report: &mut DiffReport,
+) -> bool {
     let ty1 = &json1["type"];
     let ty2 = &json1["type"];
     if ty1 != ty2 {
@@ -215,21 +238,24 @@ fn compare_items(json1: &JsonValue, json2: &JsonValue, config: &Config, mut repo
     }
     match ty1.as_str().unwrap() {
         "function" => compare_item_keys(json1, json2, FN_KEYS),
-        "struct"   => compare_item_keys(json1, json2, STRUCT_KEYS),
-        "enum"     => compare_item_keys(json1, json2, STRUCT_KEYS),
-        "mod"      => compare_modules(json1, json2, config, &mut report),
-        "trait"    => compare_traits(json1, json2, config, &mut report),
-        "method"   => compare_item_keys(json1, json2, FN_KEYS),
-        "impl"     => compare_impl(json1, json2, config, &mut report),
-        "type"     => compare_item_keys(json1, json2, TYPE_KEYS),
-        "const"    => compare_item_keys(json1, json2, CONST_KEYS),
-        "static"   => compare_item_keys(json1, json2, STATIC_KEYS),
-        "usetree"  => compare_item_keys(json1, json2, USETREE_KEYS),
-        _e         => { warn!("unsupported item type '{}'", _e); false }
+        "struct" => compare_item_keys(json1, json2, STRUCT_KEYS),
+        "enum" => compare_item_keys(json1, json2, STRUCT_KEYS),
+        "mod" => compare_modules(json1, json2, config, &mut report),
+        "trait" => compare_traits(json1, json2, config, &mut report),
+        "method" => compare_item_keys(json1, json2, FN_KEYS),
+        "impl" => compare_impl(json1, json2, config, &mut report),
+        "type" => compare_item_keys(json1, json2, TYPE_KEYS),
+        "const" => compare_item_keys(json1, json2, CONST_KEYS),
+        "static" => compare_item_keys(json1, json2, STATIC_KEYS),
+        "usetree" => compare_item_keys(json1, json2, USETREE_KEYS),
+        _e => {
+            warn!("unsupported item type '{}'", _e);
+            false
+        }
     }
 }
 
-const TRAITS_KEYS : &'static [&'static str] = &[
+const TRAITS_KEYS: &'static [&'static str] = &[
     "type",
     "typarambounds",
     "unsafety",
@@ -238,12 +264,19 @@ const TRAITS_KEYS : &'static [&'static str] = &[
     "visibility",
     "attrs",
 ];
-fn compare_traits(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
-    if compare_item_keys(json1, json2, TRAITS_KEYS) { return true; }
+fn compare_traits(
+    json1: &JsonValue,
+    json2: &JsonValue,
+    config: &Config,
+    mut report: &mut DiffReport,
+) -> bool {
+    if compare_item_keys(json1, json2, TRAITS_KEYS) {
+        return true;
+    }
     compare_modules(json1, json2, config, &mut report)
 }
 
-const IMPL_KEYS : &'static [&'static str] = &[
+const IMPL_KEYS: &'static [&'static str] = &[
     "type",
     "impl_type",
     "unsafety",
@@ -252,13 +285,20 @@ const IMPL_KEYS : &'static [&'static str] = &[
     "visibility",
     "attrs",
 ];
-fn compare_impl(json1: &JsonValue, json2: &JsonValue, config: &Config, mut report: &mut DiffReport) -> bool {
+fn compare_impl(
+    json1: &JsonValue,
+    json2: &JsonValue,
+    config: &Config,
+    mut report: &mut DiffReport,
+) -> bool {
     // XXX name of struct/union being implemented is in "impl_type" key
-    if compare_item_keys(json1, json2, IMPL_KEYS) { return true; }
+    if compare_item_keys(json1, json2, IMPL_KEYS) {
+        return true;
+    }
     compare_modules(json1, json2, config, &mut report)
 }
 
-const FN_KEYS : &'static [&'static str] = &[
+const FN_KEYS: &'static [&'static str] = &[
     "type",
     "output",
     "abi",
@@ -272,29 +312,13 @@ const FN_KEYS : &'static [&'static str] = &[
     "attrs",
 ];
 
-const STRUCT_KEYS : &'static [&'static str] = &[
-    "type",
-    "generics",
-    "where",
-    "visibility",
-    "fields",
-    "attrs",
-];
+const STRUCT_KEYS: &'static [&'static str] =
+    &["type", "generics", "where", "visibility", "fields", "attrs"];
 
-const CONST_KEYS : &'static [&'static str] = &[
-    "type",
-    "subtype",
-    "visibility",
-    "attrs",
-];
+const CONST_KEYS: &'static [&'static str] = &["type", "subtype", "visibility", "attrs"];
 
-const STATIC_KEYS : &'static [&'static str] = &[
-    "type",
-    "mutability",
-    "subtype",
-    "visibility",
-    "attrs",
-];
+const STATIC_KEYS: &'static [&'static str] =
+    &["type", "mutability", "subtype", "visibility", "attrs"];
 
 fn compare_key(json1: &JsonValue, json2: &JsonValue, name: &str, index: &str) -> bool {
     let it1 = &json1[index];
@@ -302,7 +326,9 @@ fn compare_key(json1: &JsonValue, json2: &JsonValue, name: &str, index: &str) ->
     // debug!("compare_key {}", index);
     // debug!("\tjs1: {:?}", it1);
     // debug!("\tjs2: {:?}", it2);
-    if index == "fields" { return compare_fields(it1, it2, name); }
+    if index == "fields" {
+        return compare_fields(it1, it2, name);
+    }
     // if it1.is_null() || it2.is_null() { return true; }
     it1 != it2
 }
@@ -312,13 +338,21 @@ fn compare_fields(json1: &JsonValue, json2: &JsonValue, name: &str) -> bool {
     // XXX let f2 = &json2["fields"];
     let f1 = json1;
     let f2 = json2;
-     if f1.is_null() && f2.is_null() { return false; }
-    if !f1.is_array() || !f2.is_array() { warn!("malformed item '{}':\n\t{:?}\n\t{:?}", name, f1, f2); return true; }
+    if f1.is_null() && f2.is_null() {
+        return false;
+    }
+    if !f1.is_array() || !f2.is_array() {
+        warn!("malformed item '{}':\n\t{:?}\n\t{:?}", name, f1, f2);
+        return true;
+    }
     let ty1 = json1["type"].as_str().unwrap_or("<error>");
     let mut h1 = collections::HashSet::new();
     let mut hm1 = collections::HashMap::new();
     for member in f1.members() {
-        if !member.has_key("name") { warn!("malformed fields for {} {}", ty1, name); return true; }
+        if !member.has_key("name") {
+            warn!("malformed fields for {} {}", ty1, name);
+            return true;
+        }
         let n = member["name"].as_str().unwrap();
         let obj = member;
         h1.insert(n);
@@ -327,7 +361,10 @@ fn compare_fields(json1: &JsonValue, json2: &JsonValue, name: &str) -> bool {
     let mut h2 = collections::HashSet::new();
     let mut hm2 = collections::HashMap::new();
     for member in f2.members() {
-        if !member.has_key("name") { warn!("malformed fields for {} {}", ty1, name); return true; }
+        if !member.has_key("name") {
+            warn!("malformed fields for {} {}", ty1, name);
+            return true;
+        }
         let n = member["name"].as_str().unwrap();
         let obj = member;
         h2.insert(n);
@@ -352,14 +389,12 @@ fn compare_fields(json1: &JsonValue, json2: &JsonValue, name: &str) -> bool {
     changed
 }
 
-const STRUCTFIELD_KEYS : &'static [&'static str] = &[
-    "type",
-    "visibility",
-    "fields",
-];
+const STRUCTFIELD_KEYS: &'static [&'static str] = &["type", "visibility", "fields"];
 fn compare_structfields(json1: &JsonValue, json2: &JsonValue, ty: &str, name: &str) -> bool {
     // debug!("compare_structfields {}:\n\t{:?}\n\t{:?}", name, json1, json2);
-    if !json1.is_object() || !json2.is_object() { return true; }
+    if !json1.is_object() || !json2.is_object() {
+        return true;
+    }
     let fname = json1["name"].as_str().unwrap_or("<error>");
     // let fname = if fname == "<anon>" { name } else { fname };
     for key in STRUCTFIELD_KEYS {
@@ -369,17 +404,21 @@ fn compare_structfields(json1: &JsonValue, json2: &JsonValue, ty: &str, name: &s
                 return true;
             }
         }
-        else */ if compare_key(json1, json2, fname, key) {
+        else */
+        if compare_key(json1, json2, fname, key) {
             let it1 = &json1[*key];
             let it2 = &json2[*key];
-            info!("{} '{}': field '{}' has changed '{}' from '{}' to '{}'", ty, name, fname, key, it1, it2);
+            info!(
+                "{} '{}': field '{}' has changed '{}' from '{}' to '{}'",
+                ty, name, fname, key, it1, it2
+            );
             return true;
         }
     }
     return false;
 }
 
-const TYPE_KEYS : &'static [&'static str] = &[
+const TYPE_KEYS: &'static [&'static str] = &[
     "type",
     "subtype",
     "generics",
@@ -396,9 +435,9 @@ fn compare_item_keys(json1: &JsonValue, json2: &JsonValue, keys: &[&str]) -> boo
         return true;
     }
     let fname = match &json1["name"] {
-        &JsonValue::Short(ref s)  => s.as_str(),
+        &JsonValue::Short(ref s) => s.as_str(),
         &JsonValue::String(ref s) => s,
-        _e                       => {
+        _e => {
             warn!("json value has no 'name' attribute");
             return true;
         }
@@ -407,18 +446,17 @@ fn compare_item_keys(json1: &JsonValue, json2: &JsonValue, keys: &[&str]) -> boo
         if compare_key(json1, json2, fname, key) {
             let it1 = &json1[*key];
             let it2 = &json2[*key];
-            info!("Item '{}': property '{}' has changed from '{}' to '{}'", fname, key, it1, it2);
+            info!(
+                "Item '{}': property '{}' has changed from '{}' to '{}'",
+                fname, key, it1, it2
+            );
             return true;
         }
     }
     return false;
 }
 
-const USETREE_KEYS : &'static [&'static str] = &[
-    "path",
-    "kind",
-    "visibility",
-];
+const USETREE_KEYS: &'static [&'static str] = &["path", "kind", "visibility"];
 
 fn show_report(report: &DiffReport) {
     println!("Summary:");

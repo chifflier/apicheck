@@ -1,4 +1,5 @@
-#[macro_use] extern crate pretty_assertions;
+#[macro_use]
+extern crate pretty_assertions;
 
 extern crate json;
 
@@ -24,8 +25,8 @@ fn apicheck_run_all() {
 
 #[test]
 fn apidiff_run_all() {
-    utils::run_diff_test("01","01",0).expect("diff 01/01");
-    utils::run_diff_test("01","02",1).expect("diff 01/02");
-    utils::run_diff_test("02","03",0).expect("diff 02/03");
-    utils::run_diff_test("03","04",1).expect("diff 03/04");
+    utils::run_diff_test("01", "01", 0).expect("diff 01/01");
+    utils::run_diff_test("01", "02", 1).expect("diff 01/02");
+    utils::run_diff_test("02", "03", 0).expect("diff 02/03");
+    utils::run_diff_test("03", "04", 1).expect("diff 03/04");
 }

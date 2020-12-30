@@ -8,20 +8,23 @@ use std::fmt::Debug;
 
 ///////// const
 
-pub const CONSTANT0 : u32 = 0;
+pub const CONSTANT0: u32 = 0;
 
 ///////// static
 
-pub static mut STATIC0 : u32 = 0;
+pub static mut STATIC0: u32 = 0;
 
 ///////// type aliases
 
 pub type Point = (u8, u8);
-pub type TwoTuple<T> where T : Sized = (T,T);
+pub type TwoTuple<T>
+where
+    T: Sized,
+= (T, T);
 
 ///////// functions
 
-fn lintme() { }
+fn lintme() {}
 
 pub fn fun_one_arg(x: u32) {
     let _ = x;
@@ -36,7 +39,9 @@ pub fn fun_generic<T>(x: T) -> T {
 }
 
 pub fn fun_generic_where<T>(x: T) -> T
-where T : Sized {
+where
+    T: Sized,
+{
     x
 }
 
@@ -46,51 +51,59 @@ pub const fn fun_constant(x: u32) -> u32 {
 }
 
 // variadic
-extern {
+extern "C" {
     pub fn rust_interesting_average(_: u64, ...) -> f64;
 }
 
 // unsafe
 pub unsafe fn as_u8_slice(v: &[i32]) -> &[u8] {
-    std::slice::from_raw_parts(v.as_ptr() as *const u8, 
-                               v.len() * std::mem::size_of::<i32>())
+    std::slice::from_raw_parts(
+        v.as_ptr() as *const u8,
+        v.len() * std::mem::size_of::<i32>(),
+    )
 }
 
 // extern
-pub extern fn new_i32() -> i32 { 0 }
-pub extern "stdcall" fn new_i32_stdcall() -> i32 { 0 }
+pub extern "C" fn new_i32() -> i32 {
+    0
+}
+pub extern "stdcall" fn new_i32_stdcall() -> i32 {
+    0
+}
 
 ///////// structs
 
 // simple struct, not exported
 struct Struct01 {
-    a: u32
+    a: u32,
 }
 
 // pub struct
 pub struct Struct02 {
-    a: u32
+    a: u32,
 }
 
 // struct with pub field
 pub struct Struct03 {
-    pub a: u32
+    pub a: u32,
 }
 
 // struct with lifetime
 pub struct Struct04<'a> {
-    pub s: &'a[u8]
+    pub s: &'a [u8],
 }
 
 // generic struct
 pub struct Struct05<T> {
-    pub s: Option<T>
+    pub s: Option<T>,
 }
 
 // generic struct with 'where' clause
 pub struct Struct06<T>
-where T: Debug {
-    pub s: Option<T>
+where
+    T: Debug,
+{
+    pub s: Option<T>,
 }
 
 // newtype
@@ -106,27 +119,29 @@ pub struct StructUnit;
 
 // simple snum
 pub enum Enum01 {
-    Blah
+    Blah,
 }
 
 // simple snum
 pub enum Enum02 {
     Foo,
     Bar(u32),
-    Baz(u32, String)
+    Baz(u32, String),
 }
 
 // enum with generics
 pub enum Enum03<T>
-where T: Sized {
+where
+    T: Sized,
+{
     Foo,
     Bar(Option<T>),
-    Baz
+    Baz,
 }
 
 ///////// unions
 
 // C-like union
 pub union Union01 {
-    blah: u32
+    blah: u32,
 }

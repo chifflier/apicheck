@@ -1,6 +1,6 @@
+use json;
 use std::io;
 use std::str;
-use json;
 
 #[derive(Debug)]
 pub enum ApiDiffError {
@@ -26,5 +26,3 @@ impl From<str::Utf8Error> for ApiDiffError {
         ApiDiffError::Utf8Error(e)
     }
 }
-
-

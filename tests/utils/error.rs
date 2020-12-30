@@ -1,6 +1,6 @@
 use std::convert::From;
 
-pub type Result<T> = std::result::Result<T,TestError>;
+pub type Result<T> = std::result::Result<T, TestError>;
 
 #[derive(Debug)]
 pub enum TestError {
@@ -8,7 +8,6 @@ pub enum TestError {
     IOError(std::io::Error),
     JSonError(json::Error),
 }
-
 
 impl From<std::env::VarError> for TestError {
     fn from(error: std::env::VarError) -> Self {
@@ -27,4 +26,3 @@ impl From<json::Error> for TestError {
         TestError::JSonError(error)
     }
 }
-

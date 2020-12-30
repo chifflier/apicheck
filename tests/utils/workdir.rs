@@ -9,7 +9,7 @@ use std::sync::atomic;
 use std::time::Duration;
 
 // use csv;
-// 
+//
 // use Csv;
 
 static API_INTEGRATION_TEST_DIR: &'static str = "integration_tests";
@@ -25,21 +25,27 @@ pub struct Workdir {
 impl Workdir {
     pub fn new(name: &str) -> Workdir {
         let id = NEXT_ID.fetch_add(1, atomic::Ordering::SeqCst);
-        let mut root = env::current_exe().unwrap()
-                           .parent()
-                           .expect("executable's directory")
-                           .to_path_buf();
+        let mut root = env::current_exe()
+            .unwrap()
+            .parent()
+            .expect("executable's directory")
+            .to_path_buf();
         if root.ends_with("deps") {
             root.pop();
         }
-        let dir = root.join(API_INTEGRATION_TEST_DIR)
-                      .join(name)
-                      .join(&format!("test-{}", id));
+        let dir = root
+            .join(API_INTEGRATION_TEST_DIR)
+            .join(name)
+            .join(&format!("test-{}", id));
         // println!("{:?}", dir);
         if let Err(err) = create_dir_all(&dir) {
             panic!("Could not create '{:?}': {}", dir, err);
         }
-        Workdir { root: root, dir: dir, flexible: false }
+        Workdir {
+            root: root,
+            dir: dir,
+            flexible: false,
+        }
     }
 
     pub fn flexible(mut self, yes: bool) -> Workdir {
@@ -97,48 +103,62 @@ impl Workdir {
     pub fn output(&self, cmd: &mut process::Command) -> process::Output {
         let o = cmd.output().unwrap();
         if !o.status.success() {
-            panic!("\n\n===== {:?} =====\n\
+            panic!(
+                "\n\n===== {:?} =====\n\
                     command failed but expected success!\
                     \n\ncwd: {}\
                     \n\nstatus: {}\
                     \n\nstdout: {}\n\nstderr: {}\
                     \n\n=====\n",
-                   cmd, self.dir.display(), o.status,
-                   String::from_utf8_lossy(&o.stdout),
-                   String::from_utf8_lossy(&o.stderr))
+                cmd,
+                self.dir.display(),
+                o.status,
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            )
         }
         o
     }
 
-    pub fn run(&self, cmd: &mut process::Command) -> Result<process::Output,std::io::Error> {
+    pub fn run(&self, cmd: &mut process::Command) -> Result<process::Output, std::io::Error> {
         cmd.output()
     }
 
     pub fn stdout<T: FromStr>(&self, cmd: &mut process::Command) -> T {
         let o = self.output(cmd);
         let stdout = String::from_utf8_lossy(&o.stdout);
-        stdout.trim_matches(&['\r', '\n'][..]).parse().ok().expect(
-            &format!("Could not convert from string: '{}'", stdout))
+        stdout
+            .trim_matches(&['\r', '\n'][..])
+            .parse()
+            .ok()
+            .expect(&format!("Could not convert from string: '{}'", stdout))
     }
 
     pub fn assert_err(&self, cmd: &mut process::Command) {
         let o = cmd.output().unwrap();
         if o.status.success() {
-            panic!("\n\n===== {:?} =====\n\
+            panic!(
+                "\n\n===== {:?} =====\n\
                     command succeeded but expected failure!\
                     \n\ncwd: {}\
                     \n\nstatus: {}\
                     \n\nstdout: {}\n\nstderr: {}\
                     \n\n=====\n",
-                   cmd, self.dir.display(), o.status,
-                   String::from_utf8_lossy(&o.stdout),
-                   String::from_utf8_lossy(&o.stderr));
+                cmd,
+                self.dir.display(),
+                o.status,
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            );
         }
     }
 
     pub fn from_str<T: FromStr>(&self, name: &Path) -> T {
         let mut o = String::new();
-        fs::File::open(name).unwrap().read_to_string(&mut o).unwrap();
+        fs::File::open(name)
+            .unwrap()
+            .read_to_string(&mut o)
+            .unwrap();
         o.parse().ok().expect("fromstr")
     }
 
@@ -171,7 +191,7 @@ fn create_dir_all<P: AsRef<Path>>(p: P) -> io::Result<()> {
             last_err = Some(err);
             ::std::thread::sleep(Duration::from_millis(500));
         } else {
-            return Ok(())
+            return Ok(());
         }
     }
     Err(last_err.unwrap())

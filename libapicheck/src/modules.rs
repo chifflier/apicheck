@@ -10,7 +10,7 @@
 
 use crate::attr::MetaVisitor;
 use crate::items::is_mod_decl;
-use crate::syntux::parser::{Directory, ParserError, Parser};
+use crate::syntux::parser::{Directory, Parser, ParserError};
 use crate::syntux::session::ParseSess;
 // use std::collections::BTreeMap;
 // use std::io;
@@ -556,7 +556,7 @@ fn is_cfg_if(item: &ast::Item) -> bool {
 //     result.insert(root_filename.into(), &krate.module);
 //     Ok(result)
 // }
-// 
+//
 // /// Recursively list all external modules included in a module.
 // fn list_submodules<'a>(
 //     module: &'a ast::Mod,
@@ -586,7 +586,7 @@ fn is_cfg_if(item: &ast::Item) -> bool {
 //     }
 //     Ok(())
 // }
-// 
+//
 // /// Find the file corresponding to an external mod
 // fn module_file(
 //     id: symbol::Ident,
@@ -598,7 +598,7 @@ fn is_cfg_if(item: &ast::Item) -> bool {
 //     if let Some(path) = rustc_expand::module::submod_path_from_attr(attrs, dir_path) {
 //         return Ok((path, None));
 //     }
-// 
+//
 //     match rustc_expand::module::default_submod_path(id, relative, dir_path, codemap).result {
 //         Ok(ModulePathSuccess {
 //             path,

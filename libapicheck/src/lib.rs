@@ -12,33 +12,33 @@ extern crate rustc_parse;
 extern crate rustc_session;
 extern crate rustc_span;
 
-use std::path::Path;
-use std::rc::Rc;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::convert::From;
 use std::fs::File;
 use std::io;
-use std::convert::From;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::Path;
+use std::rc::Rc;
 
 // use rustc_session::parse::ParseSess;
 use rustc_ast::ast;
-use rustc_span::source_map::{SourceMap,FilePathMapping};
-use rustc_errors::{DiagnosticBuilder, Handler};
 use rustc_errors::emitter::ColorConfig;
+use rustc_errors::{DiagnosticBuilder, Handler};
+use rustc_span::source_map::{FilePathMapping, SourceMap};
 
 pub(crate) mod attr;
-pub(crate) mod process;
 mod input;
 pub(crate) mod items;
 pub(crate) mod modules;
+pub(crate) mod process;
 pub(crate) mod result;
 pub(crate) mod syntux;
 
 pub mod config;
-use config::{Config,FileName};
+use config::{Config, FileName};
 
-use process::create_json_from_crate;
 pub use input::Input;
 pub use items::check_item;
+use process::create_json_from_crate;
 use result::OperationError;
 use syntux::parser::{DirectoryOwnership, Parser, ParserError};
 pub(crate) use syntux::session::ParseSess;
@@ -71,7 +71,6 @@ pub fn process_file(input: Input, config: &Config) -> Result<(), OperationError>
 }
 
 fn process_project(input: Input, config: &Config) -> Result<(), OperationError> {
-
     let main_file = input.file_name();
     let input_is_stdin = main_file == FileName::Stdin;
 
@@ -143,7 +142,10 @@ fn process_project(input: Input, config: &Config) -> Result<(), OperationError> 
     Ok(())
 }
 
-fn parse_input<'sess>(file: String, parse_session: &'sess rustc_session::parse::ParseSess) -> Result<ast::Crate, ParseError<'sess>> {
+fn parse_input<'sess>(
+    file: String,
+    parse_session: &'sess rustc_session::parse::ParseSess,
+) -> Result<ast::Crate, ParseError<'sess>> {
     //
     let file = Path::new(&file);
     let mut parser = rustc_parse::new_parser_from_file(&parse_session, &file, None);
@@ -166,7 +168,7 @@ fn parse_input<'sess>(file: String, parse_session: &'sess rustc_session::parse::
     }
 }
 
-fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(),io::Error> {
+fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(), io::Error> {
     match &output {
         FileName::Stdin => panic!("Cannot output to stdin"),
         FileName::Stdout => println!("{}", js),
@@ -174,7 +176,7 @@ fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(),io::Error> {
             let file = File::create(path)?;
             let mut buf_writer = io::BufWriter::new(file);
             js.write(&mut buf_writer)?;
-        },
+        }
     }
     Ok(())
 }
