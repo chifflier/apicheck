@@ -1,1 +1,1 @@
-{"modules":[{"path":"assets/const_fn.rs","items":[{"type":"function","name":"double","inputs":[{"type":"i32","name":"x"}],"output":"i32","variadic":false,"unsafety":"normal","constness":"const","abi":"Rust","generics":"","where":"","visibility":"public","attrs":[]}]}]}
+{"modules":[{"path":"assets/const_fn.rs","items":[{"type":"function","name":"double","inputs":[{"type":"i32","name":"x"}],"output":"i32","variadic":false,"unsafe":false,"const":true,"extern":"","generics":"","where":"","visibility":"public","attrs":[]}]}]}

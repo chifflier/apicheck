@@ -102,16 +102,16 @@ fn fun_to_json(ident: &symbol::Ident,
     // create initial json from function declaration
     let mut fun_js = fun_decl_to_json(&ident, &fndecl);
     // add qualifiers
-    let c = match &header.unsafety {
-        ast::Unsafe::Yes(_) => "yes",
-        ast::Unsafe::No => "",
+    let b = match &header.unsafety {
+        ast::Unsafe::Yes(_) => true,
+        ast::Unsafe::No => false,
     };
-    fun_js["unsafe"] = json::JsonValue::String(c.to_owned());
-    let c = match &header.constness {
-        ast::Const::Yes(_) => "yes",
-        ast::Const::No => "",
+    fun_js["unsafe"] = json::JsonValue::Boolean(b);
+    let b = match &header.constness {
+        ast::Const::Yes(_) => true,
+        ast::Const::No => false,
     };
-    fun_js["const"] = json::JsonValue::String(c.to_owned());
+    fun_js["const"] = json::JsonValue::Boolean(b);
     //
     // abi was renamed to extern
     let s = extern_to_string(&header.ext);
@@ -155,11 +155,11 @@ fn trait_to_json(ident: &symbol::Ident,
     }).collect();
     js["typarambounds"] = json::JsonValue::Array(v);
     // add qualifiers
-    let c = match unsafety {
-        ast::Unsafe::Yes(_) => "yes",
-        ast::Unsafe::No => "",
+    let b = match unsafety {
+        ast::Unsafe::Yes(_) => true,
+        ast::Unsafe::No => false,
     };
-    js["unsafe"] = json::JsonValue::String(c.to_owned());
+    js["unsafe"] = json::JsonValue::Boolean(b);
     //
     js_add_generics(&mut js, generics);
     // trait items
@@ -284,11 +284,11 @@ fn impl_to_json(ident: &symbol::Ident,
     };
     js["trait"] = json::JsonValue::String(thetrait);
     //
-    let c = match unsafety {
-        ast::Unsafe::Yes(_) => "yes",
-        ast::Unsafe::No => "",
+    let b = match unsafety {
+        ast::Unsafe::Yes(_) => true,
+        ast::Unsafe::No => false,
     };
-    js["unsafe"] = json::JsonValue::String(c.to_owned());
+    js["unsafe"] = json::JsonValue::Boolean(b);
     // generics
     js_add_generics(&mut js, &generics);
     // implementation items
