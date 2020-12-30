@@ -1,9 +1,11 @@
+extern crate ignore;
 extern crate json;
 extern crate term;
 extern crate thiserror;
 
 extern crate rustc_ast;
 extern crate rustc_ast_pretty;
+extern crate rustc_data_structures;
 extern crate rustc_errors;
 extern crate rustc_expand;
 extern crate rustc_parse;
@@ -12,28 +14,34 @@ extern crate rustc_span;
 
 use std::path::Path;
 use std::rc::Rc;
-
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::fs::File;
+use std::io;
+use std::convert::From;
 
-use rustc_session::parse::ParseSess;
+// use rustc_session::parse::ParseSess;
 use rustc_ast::ast;
 use rustc_span::source_map::{SourceMap,FilePathMapping};
 use rustc_errors::{DiagnosticBuilder, Handler};
 use rustc_errors::emitter::ColorConfig;
 
-use std::fs::File;
-use std::io;
-use std::convert::From;
-
+pub(crate) mod attr;
 pub(crate) mod process;
+mod input;
 pub(crate) mod items;
 pub(crate) mod modules;
+pub(crate) mod result;
+pub(crate) mod syntux;
 
 pub mod config;
 use config::{Config,FileName};
 
 use process::create_json_from_crate;
+pub use input::Input;
 pub use items::check_item;
+use result::OperationError;
+use syntux::parser::{DirectoryOwnership, Parser, ParserError};
+pub(crate) use syntux::session::ParseSess;
 
 #[derive(Debug)]
 pub enum ApiCheckError<'a> {
@@ -58,51 +66,84 @@ pub enum ParseError<'sess> {
     Panic,
 }
 
-pub fn process_file(input: String, config: &Config) {
-    rustc_span::with_session_globals(config.edition, || process_file_inner(input, &config))
+pub fn process_file(input: Input, config: &Config) -> Result<(), OperationError> {
+    rustc_span::with_session_globals(config.edition, || process_project(input, &config))
 }
 
-fn process_file_inner(input: String, config: &Config) {
-    // build parsing session
-    let codemap = Rc::new(SourceMap::new(FilePathMapping::empty()));
-    let tty_handler = {
-        let supports_color = term::stderr().map_or(false, |term| term.supports_color());
-        let color_cfg = if supports_color {
-            ColorConfig::Auto
-        } else {
-            ColorConfig::Never
-        };
-        Handler::with_tty_emitter(color_cfg, true, None, Some(codemap.clone()))
+fn process_project(input: Input, config: &Config) -> Result<(), OperationError> {
+
+    let main_file = input.file_name();
+    let input_is_stdin = main_file == FileName::Stdin;
+
+    let mut parse_session = ParseSess::new(config)?;
+
+    // Parse the crate.
+    let recursive = true;
+    let directory_ownership = input.to_directory_ownership(recursive);
+    let original_snippet = if let Input::Text(ref str) = input {
+        Some(str.to_owned())
+    } else {
+        None
     };
-    let mut parse_session = ParseSess::with_span_handler(tty_handler, codemap.clone());
-    //
-    let krate = match parse_input(input, &parse_session) {
+
+    let krate = match Parser::parse_crate(config, input, directory_ownership, &parse_session) {
         Ok(krate) => krate,
-        Err(err) => {
-            match err {
-                ParseError::Error(mut diagnostic) => diagnostic.emit(),
-                ParseError::Panic => {
-                    // // Note that if you see this message and want more information,
-                    // // then go to `parse_input` and run the parse function without
-                    // // `catch_unwind` so rustfmt panics and you can get a backtrace.
-                    // should_emit_verbose(&main_file, config, || {
-                    //     println!("The Rust parser panicked")
-                    // });
-                }
-                ParseError::Recovered => {}
-            }
-            // summary.add_parsing_error();
-            // return Ok((summary, FileMap::new(), FormatReport::new()));
-            panic!("parsing failed");
+        Err(e) => {
+            return Err(OperationError::ParseError {
+                input: main_file,
+                is_panic: e == ParserError::ParsePanicError,
+            });
         }
     };
 
-    let result = create_json_from_crate(&krate, &mut parse_session, &config);
+    let files = modules::ModResolver::new(
+        &parse_session,
+        directory_ownership.unwrap_or(DirectoryOwnership::UnownedViaMod),
+        !input_is_stdin && recursive,
+    )
+    .visit_crate(&krate)?;
+
+    // // build parsing session
+    // let codemap = Rc::new(SourceMap::new(FilePathMapping::empty()));
+    // let tty_handler = {
+    //     let supports_color = term::stderr().map_or(false, |term| term.supports_color());
+    //     let color_cfg = if supports_color {
+    //         ColorConfig::Auto
+    //     } else {
+    //         ColorConfig::Never
+    //     };
+    //     Handler::with_tty_emitter(color_cfg, true, None, Some(codemap.clone()))
+    // };
+    // let mut parse_session = rustc_session::parse::ParseSess::with_span_handler(tty_handler, codemap.clone());
+    // //
+    // let krate = match parse_input(input, &parse_session) {
+    //     Ok(krate) => krate,
+    //     Err(err) => {
+    //         match err {
+    //             ParseError::Error(mut diagnostic) => diagnostic.emit(),
+    //             ParseError::Panic => {
+    //                 // // Note that if you see this message and want more information,
+    //                 // // then go to `parse_input` and run the parse function without
+    //                 // // `catch_unwind` so rustfmt panics and you can get a backtrace.
+    //                 // should_emit_verbose(&main_file, config, || {
+    //                 //     println!("The Rust parser panicked")
+    //                 // });
+    //             }
+    //             ParseError::Recovered => {}
+    //         }
+    //         // summary.add_parsing_error();
+    //         // return Ok((summary, FileMap::new(), FormatReport::new()));
+    //         panic!("parsing failed");
+    //     }
+    // };
+
+    let result = create_json_from_crate(&files, &mut parse_session, &config);
     let json = result.expect("extracting JSON failed");
     write_json(&json, &config.output).expect("writing JSON failed");
+    Ok(())
 }
 
-fn parse_input<'sess>(file: String, parse_session: &'sess ParseSess) -> Result<ast::Crate, ParseError<'sess>> {
+fn parse_input<'sess>(file: String, parse_session: &'sess rustc_session::parse::ParseSess) -> Result<ast::Crate, ParseError<'sess>> {
     //
     let file = Path::new(&file);
     let mut parser = rustc_parse::new_parser_from_file(&parse_session, &file, None);

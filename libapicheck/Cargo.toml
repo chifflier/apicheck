@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 
 [dependencies]
-term = "0.5"
+ignore = "0.4.11"
 json = "0.11"
+term = "0.5"
 thiserror = "1.0"
 
 [dependencies.rustc_ast]
@@ -14,6 +15,10 @@ version = "691.0.0"
 
 [dependencies.rustc_ast_pretty]
 package = "rustc-ap-rustc_ast_pretty"
+version = "691.0.0"
+
+[dependencies.rustc_data_structures]
+package = "rustc-ap-rustc_data_structures"
 version = "691.0.0"
 
 [dependencies.rustc_errors]

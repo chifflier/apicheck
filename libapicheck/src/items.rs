@@ -35,13 +35,19 @@ fn fun_decl_to_json(ident: &symbol::Ident, fndecl: &ast::FnDecl) -> JsonValue {
     fun_js
 }
 
-// fn extern_to_string(ext: &ast::Extern) -> String {
-//     match ext {
-//         ast::Extern::None => "".to_owned(),
-//         ast::Extern::Implicit => "extern".to_owned(),
-//         ast::Extern::Explicit(abi) => format!("extern {}", abi.symbol),
-//     }
-// }
+fn extern_to_string(ext: &ast::Extern) -> String {
+    match ext {
+        ast::Extern::Explicit(s) => {
+            s.symbol.to_ident_string()
+        },
+        ast::Extern::Implicit => {
+            "implicit".to_owned()
+            }
+        ast::Extern::None => {
+            "".to_owned()
+        },
+    }
+}
 
 fn print_where_clause(where_clause: &ast::WhereClause) -> String {
     if where_clause.predicates.is_empty() {
@@ -107,17 +113,9 @@ fn fun_to_json(ident: &symbol::Ident,
     };
     fun_js["const"] = json::JsonValue::String(c.to_owned());
     //
-    // XXX abi was renamed to extern
-    match &header.ext {
-        ast::Extern::Explicit(s) => {
-            let s = s.symbol.to_ident_string(); // XXX is this correct?
-            fun_js["abi"] = json::JsonValue::String(s);
-        },
-        ast::Extern::Implicit | ast::Extern::None => {
-            fun_js["abi"] = json::JsonValue::String("".to_owned());
-        },
-    };
-    // fun_js["extern"] = json::JsonValue::String(format!("{}", extern_to_string(&header.ext)));
+    // abi was renamed to extern
+    let s = extern_to_string(&header.ext);
+    fun_js["extern"] = json::JsonValue::String(s);
     //
     // XXX asyncness
     //
@@ -529,4 +527,20 @@ fn js_add_generics(js: &mut json::JsonValue, generics: &ast::Generics) {
     // let s_where = pprust::where_clause_to_string(&generics.where_clause);
     let s_where = print_where_clause(&generics.where_clause);
     js["where"] = json::JsonValue::String(s_where);
+}
+
+/// Returns `true` for `mod foo;`, false for `mod foo { .. }`.
+pub(crate) fn is_mod_decl(item: &ast::Item) -> bool {
+    match item.kind {
+        ast::ItemKind::Mod(ref m) => m.inner.hi() != item.span.hi(),
+        _ => false,
+    }
+}
+
+pub(crate) fn is_use_item(item: &ast::Item) -> bool {
+    matches!(item.kind, ast::ItemKind::Use(_))
+}
+
+pub(crate) fn is_extern_crate(item: &ast::Item) -> bool {
+    matches!(item.kind, ast::ItemKind::ExternCrate(..))
 }

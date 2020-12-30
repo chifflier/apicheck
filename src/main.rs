@@ -7,6 +7,7 @@ use std::env;
 use std::path::PathBuf;
 
 use libapicheck::config::FileName;
+use libapicheck::Input;
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
@@ -46,5 +47,6 @@ fn main() {
     };
     // work !
     if config.debug > 0 { println!("Processing file {}", input); }
+    let input = Input::File(PathBuf::from(input));
     libapicheck::process_file(input, &config);
 }
