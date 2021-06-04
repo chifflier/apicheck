@@ -2,7 +2,7 @@
 // #![plugin(apicheck)]
 
 // required to test constant functions
-#![feature(const_fn)]
+// #![feature(const_fn)]
 
 use std::fmt::Debug;
 

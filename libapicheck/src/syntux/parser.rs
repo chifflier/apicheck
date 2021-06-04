@@ -1,18 +1,22 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
-use rustc_ast::ast;
 use rustc_ast::token::{DelimToken, TokenKind};
+use rustc_ast::{ast, ptr};
 use rustc_errors::Diagnostic;
-use rustc_parse::{new_parser_from_file, parser::Parser as RawParser};
+use rustc_parse::{
+    new_parser_from_file,
+    parser::{ForceCollect, Parser as RawParser},
+};
 use rustc_span::{sym, symbol::kw, Span};
 
 use crate::attr::first_attr_value_str_by_name;
 use crate::syntux::session::ParseSess;
-use crate::{Config, Input};
+use crate::Input;
 
-pub(crate) type DirectoryOwnership = rustc_expand::module::DirectoryOwnership;
+pub(crate) type DirectoryOwnership = rustc_expand::module::DirOwnership;
 pub(crate) type ModulePathSuccess = rustc_expand::module::ModulePathSuccess;
+pub(crate) type ModError<'a> = rustc_expand::module::ModError<'a>;
 
 #[derive(Clone)]
 pub(crate) struct Directory {
@@ -28,10 +32,8 @@ pub(crate) struct Parser<'a> {
 /// A builder for the `Parser`.
 #[derive(Default)]
 pub(crate) struct ParserBuilder<'a> {
-    config: Option<&'a Config>,
     sess: Option<&'a ParseSess>,
     input: Option<Input>,
-    directory_ownership: Option<DirectoryOwnership>,
 }
 
 impl<'a> ParserBuilder<'a> {
@@ -42,19 +44,6 @@ impl<'a> ParserBuilder<'a> {
 
     pub(crate) fn sess(mut self, sess: &'a ParseSess) -> ParserBuilder<'a> {
         self.sess = Some(sess);
-        self
-    }
-
-    pub(crate) fn config(mut self, config: &'a Config) -> ParserBuilder<'a> {
-        self.config = Some(config);
-        self
-    }
-
-    pub(crate) fn directory_ownership(
-        mut self,
-        directory_ownership: Option<DirectoryOwnership>,
-    ) -> ParserBuilder<'a> {
-        self.directory_ownership = directory_ownership;
         self
     }
 
@@ -90,7 +79,7 @@ impl<'a> ParserBuilder<'a> {
                 rustc_span::FileName::Custom("stdin".to_owned()),
                 text,
             )
-            .map_err(Some),
+            .map_err(|db| Some(db)),
         }
     }
 }
@@ -121,10 +110,10 @@ impl<'a> Parser<'a> {
         sess: &'a ParseSess,
         path: &Path,
         span: Span,
-    ) -> Result<(ast::Mod, Vec<ast::Attribute>), ParserError> {
+    ) -> Result<(Vec<ast::Attribute>, Vec<ptr::P<ast::Item>>, Span), ParserError> {
         let result = catch_unwind(AssertUnwindSafe(|| {
             let mut parser = new_parser_from_file(sess.inner(), &path, Some(span));
-            match parser.parse_mod(&TokenKind::Eof, ast::Unsafe::No) {
+            match parser.parse_mod(&TokenKind::Eof) {
                 Ok(result) => Some(result),
                 Err(mut e) => {
                     sess.emit_or_cancel_diagnostic(&mut e);
@@ -154,12 +143,10 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn parse_crate(
-        config: &'a Config,
         input: Input,
-        directory_ownership: Option<DirectoryOwnership>,
         sess: &'a ParseSess,
     ) -> Result<ast::Crate, ParserError> {
-        let krate = Parser::parse_crate_inner(config, input, directory_ownership, sess)?;
+        let krate = Parser::parse_crate_inner(input, sess)?;
         if !sess.has_errors() {
             return Ok(krate);
         }
@@ -172,20 +159,12 @@ impl<'a> Parser<'a> {
         Err(ParserError::ParseError)
     }
 
-    fn parse_crate_inner(
-        config: &'a Config,
-        input: Input,
-        directory_ownership: Option<DirectoryOwnership>,
-        sess: &'a ParseSess,
-    ) -> Result<ast::Crate, ParserError> {
-        let mut parser = ParserBuilder::default()
-            .config(config)
+    fn parse_crate_inner(input: Input, sess: &'a ParseSess) -> Result<ast::Crate, ParserError> {
+        ParserBuilder::default()
             .input(input)
-            .directory_ownership(directory_ownership)
             .sess(sess)
-            .build()?;
-
-        parser.parse_crate_mod()
+            .build()?
+            .parse_crate_mod()
     }
 
     fn parse_crate_mod(&mut self) -> Result<ast::Crate, ParserError> {
@@ -217,7 +196,9 @@ impl<'a> Parser<'a> {
         mac: &'a ast::MacCall,
     ) -> Result<Vec<ast::Item>, &'static str> {
         let token_stream = mac.args.inner_tokens();
-        let mut parser = rustc_parse::stream_to_parser(sess.inner(), token_stream, Some(""));
+        let mut parser =
+            rustc_parse::stream_to_parser(sess.inner(), token_stream.clone(), Some(""));
+
         let mut items = vec![];
         let mut process_if_cfg = true;
 
@@ -246,7 +227,7 @@ impl<'a> Parser<'a> {
             while parser.token != TokenKind::CloseDelim(DelimToken::Brace)
                 && parser.token.kind != TokenKind::Eof
             {
-                let item = match parser.parse_item() {
+                let item = match parser.parse_item(ForceCollect::No) {
                     Ok(Some(item_ptr)) => item_ptr.into_inner(),
                     Ok(None) => continue,
                     Err(mut err) => {

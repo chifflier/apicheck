@@ -23,7 +23,7 @@ fn main() {
     opts.optopt("o", "output", "output file name", "FILE");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(f) => panic!("{}", f),
     };
     if matches.opt_present("h") {
         print_usage(&args[0], opts);

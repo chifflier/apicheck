@@ -1,4 +1,4 @@
-use crate::modules::DirectoryOwnership;
+use crate::DirectoryOwnership;
 use crate::FileName;
 use rustc_span::symbol;
 use std::path::PathBuf;

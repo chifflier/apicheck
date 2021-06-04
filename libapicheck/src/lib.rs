@@ -15,17 +15,11 @@ extern crate rustc_span;
 use std::convert::From;
 use std::fs::File;
 use std::io;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::Path;
-use std::rc::Rc;
 
-// use rustc_session::parse::ParseSess;
-use rustc_ast::ast;
-use rustc_errors::emitter::ColorConfig;
-use rustc_errors::{DiagnosticBuilder, Handler};
-use rustc_span::source_map::{FilePathMapping, SourceMap};
+use rustc_errors::DiagnosticBuilder;
 
 pub(crate) mod attr;
+pub(crate) mod ignore_path;
 mod input;
 pub(crate) mod items;
 pub(crate) mod modules;
@@ -34,14 +28,17 @@ pub(crate) mod result;
 pub(crate) mod syntux;
 
 pub mod config;
-use config::{Config, FileName};
+pub mod context;
+use crate::context::Context;
+pub use config::{Config, FileName};
+use modules::ModuleResolutionError;
 
 pub use input::Input;
 pub use items::check_item;
 use process::create_json_from_crate;
-use result::OperationError;
-use syntux::parser::{DirectoryOwnership, Parser, ParserError};
+use syntux::parser::{DirectoryOwnership, Parser};
 pub(crate) use syntux::session::ParseSess;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub enum ApiCheckError<'a> {
@@ -66,15 +63,76 @@ pub enum ParseError<'sess> {
     Panic,
 }
 
-pub fn process_file(input: Input, config: &Config) -> Result<(), OperationError> {
+/// The various errors that can occur during formatting. Note that not all of
+/// these can currently be propagated to clients.
+#[derive(Error, Debug)]
+pub enum ErrorKind {
+    /// Line has exceeded character limit (found, maximum).
+    #[error(
+        "line formatted, but exceeded maximum width \
+         (maximum: {1} (see `max_width` option), found: {0})"
+    )]
+    LineOverflow(usize, usize),
+    /// Line ends in whitespace.
+    #[error("left behind trailing whitespace")]
+    TrailingWhitespace,
+    // /// TODO or FIXME item without an issue number.
+    // #[error("found {0}")]
+    // BadIssue(Issue),
+    /// License check has failed.
+    #[error("license check failed")]
+    LicenseCheck,
+    /// Used deprecated skip attribute.
+    #[error("`rustfmt_skip` is deprecated; use `rustfmt::skip`")]
+    DeprecatedAttr,
+    /// Used a rustfmt:: attribute other than skip or skip::macros.
+    #[error("invalid attribute")]
+    BadAttr,
+    /// An io error during reading or writing.
+    #[error("io error: {0}")]
+    IoError(io::Error),
+    /// Error during module resolution.
+    #[error("{0}")]
+    ModuleResolutionError(#[from] ModuleResolutionError),
+    /// Parse error occurred when parsing the input.
+    #[error("parse error")]
+    ParseError,
+    /// The user mandated a version and the current version of Rustfmt does not
+    /// satisfy that requirement.
+    #[error("version mismatch")]
+    VersionMismatch,
+    /// If we had formatted the given node, then we would have lost a comment.
+    #[error("not formatted because a comment would be lost")]
+    LostComment,
+    /// Invalid glob pattern in `ignore` configuration option.
+    #[error("Invalid glob pattern found in ignore list: {0}")]
+    InvalidGlobPattern(ignore::Error),
+}
+
+impl ErrorKind {
+    fn is_comment(&self) -> bool {
+        match self {
+            ErrorKind::LostComment => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<io::Error> for ErrorKind {
+    fn from(e: io::Error) -> ErrorKind {
+        ErrorKind::IoError(e)
+    }
+}
+
+pub fn process_file(input: Input, config: &Config) -> Result<(), ErrorKind> {
     rustc_span::with_session_globals(config.edition, || process_project(input, &config))
 }
 
-fn process_project(input: Input, config: &Config) -> Result<(), OperationError> {
+fn process_project(input: Input, config: &Config) -> Result<(), ErrorKind> {
     let main_file = input.file_name();
     let input_is_stdin = main_file == FileName::Stdin;
 
-    let mut parse_session = ParseSess::new(config)?;
+    let parse_session = ParseSess::new(config)?;
 
     // Parse the crate.
     let recursive = true;
@@ -85,19 +143,17 @@ fn process_project(input: Input, config: &Config) -> Result<(), OperationError> 
         None
     };
 
-    let krate = match Parser::parse_crate(config, input, directory_ownership, &parse_session) {
+    let krate = match Parser::parse_crate(input, &parse_session) {
         Ok(krate) => krate,
         Err(e) => {
-            return Err(OperationError::ParseError {
-                input: main_file,
-                is_panic: e == ParserError::ParsePanicError,
-            });
+            eprintln!("Parse error:\n{:?}", e);
+            return Err(ErrorKind::ParseError);
         }
     };
 
     let files = modules::ModResolver::new(
         &parse_session,
-        directory_ownership.unwrap_or(DirectoryOwnership::UnownedViaMod),
+        directory_ownership.unwrap_or(DirectoryOwnership::UnownedViaBlock),
         !input_is_stdin && recursive,
     )
     .visit_crate(&krate)?;
@@ -136,36 +192,12 @@ fn process_project(input: Input, config: &Config) -> Result<(), OperationError> 
     //     }
     // };
 
-    let result = create_json_from_crate(&files, &mut parse_session, &config);
+    let context = Context::new(config);
+
+    let result = create_json_from_crate(&files, &context);
     let json = result.expect("extracting JSON failed");
     write_json(&json, &config.output).expect("writing JSON failed");
     Ok(())
-}
-
-fn parse_input<'sess>(
-    file: String,
-    parse_session: &'sess rustc_session::parse::ParseSess,
-) -> Result<ast::Crate, ParseError<'sess>> {
-    //
-    let file = Path::new(&file);
-    let mut parser = rustc_parse::new_parser_from_file(&parse_session, &file, None);
-
-    // XXX parser.cfg_mods = false;
-    let mut parser = AssertUnwindSafe(parser);
-    let result = catch_unwind(move || parser.0.parse_crate_mod());
-
-    match result {
-        Ok(Ok(c)) => {
-            if parse_session.span_diagnostic.has_errors() {
-                // Bail out if the parser recovered from an error.
-                Err(ParseError::Recovered)
-            } else {
-                Ok(c)
-            }
-        }
-        Ok(Err(e)) => Err(ParseError::Error(e)),
-        Err(_) => Err(ParseError::Panic),
-    }
 }
 
 fn write_json(js: &json::JsonValue, output: &FileName) -> Result<(), io::Error> {

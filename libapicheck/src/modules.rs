@@ -1,94 +1,69 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
-use crate::attr::MetaVisitor;
-use crate::items::is_mod_decl;
-use crate::syntux::parser::{Directory, Parser, ParserError};
-use crate::syntux::session::ParseSess;
-// use std::collections::BTreeMap;
-// use std::io;
-// use std::path::{Path, PathBuf};
-
-// use rustc_parse::parser;
-use rustc_ast::ast;
-use rustc_span::{source_map, sym, symbol, Symbol};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use rustc_ast::ast;
+// use rustc_ast::visit::Visitor;
+use rustc_ast::AstLike;
+use rustc_span::symbol::{self, sym, Symbol};
+use rustc_span::Span;
 use thiserror::Error;
 
-mod visitor;
-
-pub(crate) type DirectoryOwnership = rustc_expand::module::DirectoryOwnership;
-pub(crate) type ModulePathSuccess = rustc_expand::module::ModulePathSuccess;
-
+use crate::attr::MetaVisitor;
 use config::FileName;
+use crate::items::is_mod_decl;
+use crate::syntux::parser::{
+    Directory, DirectoryOwnership, ModError, ModulePathSuccess, Parser, ParserError,
+};
+use crate::syntux::session::ParseSess;
 // use utils::contains_skip;
 
-impl From<source_map::FileName> for FileName {
-    fn from(name: source_map::FileName) -> FileName {
-        match name {
-            source_map::FileName::Real(rustc_span::RealFileName::Named(p)) => FileName::Real(p),
-            source_map::FileName::Custom(ref f) if f == "stdin" => FileName::Stdin,
-            _ => unreachable!(),
-        }
-    }
-}
+mod visitor;
 
 pub(crate) type FileModMap<'ast> = BTreeMap<FileName, Module<'ast>>;
 
 /// Represents module with its inner attributes.
 #[derive(Debug, Clone)]
 pub(crate) struct Module<'a> {
-    pub(crate) ast_mod: Cow<'a, ast::Mod>,
-    pub(crate) ast_item: Option<Cow<'a, ast::Item>>,
-    pub(crate) inner_attr: Vec<ast::Attribute>,
+    ast_mod_kind: Option<Cow<'a, ast::ModKind>>,
+    pub(crate) items: Cow<'a, Vec<rustc_ast::ptr::P<ast::Item>>>,
+    attrs: Cow<'a, Vec<ast::Attribute>>,
+    inner_attr: Vec<ast::Attribute>,
+    pub(crate) span: Span,
 }
 
 impl<'a> Module<'a> {
-    fn ident(&self) -> symbol::Ident {
-        match self.ast_item {
-            None => symbol::Ident::invalid(),
-            Some(ref item) => item.ident,
-        }
-    }
-
-    fn name(&self) -> String {
-        match self.ast_item {
-            None => String::new(),
-            Some(ref item) => item.ident.to_string(),
-        }
-    }
-
-    fn outer_attrs(&self) -> &[ast::Attribute] {
-        match self.ast_item {
-            None => &[],
-            Some(ref item) => &item.attrs,
-        }
-    }
-
     pub(crate) fn new(
-        ast_mod: Cow<'a, ast::Mod>,
-        ast_item: Option<Cow<'a, ast::Item>>,
-        attrs: &[ast::Attribute],
+        mod_span: Span,
+        ast_mod_kind: Option<Cow<'a, ast::ModKind>>,
+        mod_items: Cow<'a, Vec<rustc_ast::ptr::P<ast::Item>>>,
+        mod_attrs: Cow<'a, Vec<ast::Attribute>>,
     ) -> Self {
-        let inner_attr = attrs
+        let inner_attr = mod_attrs
             .iter()
             .filter(|attr| attr.style == ast::AttrStyle::Inner)
             .cloned()
             .collect();
         Module {
-            ast_item,
-            ast_mod,
+            items: mod_items,
+            attrs: mod_attrs,
             inner_attr,
+            span: mod_span,
+            ast_mod_kind,
         }
+    }
+}
+
+impl<'a> AstLike for Module<'a> {
+    const SUPPORTS_CUSTOM_INNER_ATTRS: bool = true;
+    fn attrs(&self) -> &[ast::Attribute] {
+        &self.inner_attr
+    }
+    fn visit_attrs(&mut self, f: impl FnOnce(&mut Vec<ast::Attribute>)) {
+        f(&mut self.inner_attr)
+    }
+    fn tokens_mut(&mut self) -> Option<&mut Option<rustc_ast::tokenstream::LazyTokenStream>> {
+        unimplemented!()
     }
 }
 
@@ -101,8 +76,8 @@ pub(crate) struct ModResolver<'ast, 'sess> {
 }
 
 /// Represents errors while trying to resolve modules.
-#[error("failed to resolve mod `{module}`: {kind}")]
 #[derive(Debug, Error)]
+#[error("failed to resolve mod `{module}`: {kind}")]
 pub struct ModuleResolutionError {
     pub(crate) module: String,
     pub(crate) kind: ModuleResolutionErrorKind,
@@ -119,16 +94,16 @@ pub(crate) enum ModuleResolutionErrorKind {
 }
 
 #[derive(Clone)]
-enum SubModKind<'ast> {
+enum SubModKind<'a, 'ast> {
     /// `mod foo;`
     External(PathBuf, DirectoryOwnership, Module<'ast>),
     /// `mod foo;` with multiple sources.
     MultiExternal(Vec<(PathBuf, DirectoryOwnership, Module<'ast>)>),
     /// `mod foo {}`
-    Internal(Cow<'ast, ast::Item>),
+    Internal(&'a ast::Item),
 }
 
-impl<'ast, 'sess> ModResolver<'ast, 'sess> {
+impl<'ast, 'sess, 'c> ModResolver<'ast, 'sess> {
     /// Creates a new `ModResolver`.
     pub(crate) fn new(
         parse_sess: &'sess ParseSess,
@@ -153,15 +128,23 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
     ) -> Result<FileModMap<'ast>, ModuleResolutionError> {
         let root_filename = self.parse_sess.span_to_filename(krate.span);
         self.directory.path = match root_filename {
-            FileName::Real(ref p) => p.parent().unwrap_or_else(|| Path::new("")).to_path_buf(),
+            FileName::Real(ref p) => p.parent().unwrap_or(Path::new("")).to_path_buf(),
             _ => PathBuf::new(),
         };
 
-        self.visit_mod_from_ast(&krate.module)?;
+        // Skip visiting sub modules when the input is from stdin.
+        if self.recursive {
+            self.visit_mod_from_ast(&krate.items)?;
+        }
 
         self.file_map.insert(
             root_filename,
-            Module::new(Cow::Borrowed(&krate.module), None, &krate.attrs),
+            Module::new(
+                krate.span,
+                None,
+                Cow::Borrowed(&krate.items),
+                Cow::Borrowed(&krate.attrs),
+            ),
         );
         Ok(self.file_map)
     }
@@ -180,32 +163,43 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
         //         ))?;
         //     }
         // }
-        Ok(())
+        // Ok(())
     }
 
     /// Visit modules defined inside macro calls.
-    fn visit_mod_outside_ast(&mut self, module: ast::Mod) -> Result<(), ModuleResolutionError> {
-        for item in module.items {
+    fn visit_mod_outside_ast(
+        &mut self,
+        items: Vec<rustc_ast::ptr::P<ast::Item>>,
+    ) -> Result<(), ModuleResolutionError> {
+        for item in items {
             if is_cfg_if(&item) {
                 unimplemented!();
                 // self.visit_cfg_if(Cow::Owned(item.into_inner()))?;
                 // continue;
             }
 
-            if let ast::ItemKind::Mod(ref sub_mod) = item.kind {
-                self.visit_sub_mod(Module::new(
-                    Cow::Owned(sub_mod.clone()),
-                    Some(Cow::Owned(item.into_inner())),
-                    &[],
-                ))?;
+            if let ast::ItemKind::Mod(_, ref sub_mod_kind) = item.kind {
+                let span = item.span;
+                self.visit_sub_mod(
+                    &item,
+                    Module::new(
+                        span,
+                        Some(Cow::Owned(sub_mod_kind.clone())),
+                        Cow::Owned(vec![]),
+                        Cow::Owned(vec![]),
+                    ),
+                )?;
             }
         }
         Ok(())
     }
 
     /// Visit modules from AST.
-    fn visit_mod_from_ast(&mut self, module: &'ast ast::Mod) -> Result<(), ModuleResolutionError> {
-        for item in &module.items {
+    fn visit_mod_from_ast(
+        &mut self,
+        items: &'ast Vec<rustc_ast::ptr::P<ast::Item>>,
+    ) -> Result<(), ModuleResolutionError> {
+        for item in items {
             if is_cfg_if(item) {
                 unimplemented!();
                 // let result = self.visit_cfg_if(Cow::Borrowed(item));
@@ -214,28 +208,32 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
                 // }
             }
 
-            if let ast::ItemKind::Mod(ref sub_mod) = item.kind {
-                let result = self.visit_sub_mod(Module::new(
-                    Cow::Borrowed(sub_mod),
-                    Some(Cow::Borrowed(item)),
-                    &item.attrs,
-                ));
-                if result.is_err() && self.recursive {
-                    return result;
-                }
+            if let ast::ItemKind::Mod(_, ref sub_mod_kind) = item.kind {
+                let span = item.span;
+                self.visit_sub_mod(
+                    item,
+                    Module::new(
+                        span,
+                        Some(Cow::Borrowed(sub_mod_kind)),
+                        Cow::Owned(vec![]),
+                        Cow::Borrowed(&item.attrs),
+                    ),
+                )?;
             }
         }
         Ok(())
     }
 
-    fn visit_sub_mod(&mut self, sub_mod: Module<'ast>) -> Result<(), ModuleResolutionError> {
+    fn visit_sub_mod(
+        &mut self,
+        item: &'c ast::Item,
+        sub_mod: Module<'ast>,
+    ) -> Result<(), ModuleResolutionError> {
         let old_directory = self.directory.clone();
-        let sub_mod_kind = self.peek_sub_mod(&sub_mod)?;
+        let sub_mod_kind = self.peek_sub_mod(item, &sub_mod)?;
         if let Some(sub_mod_kind) = sub_mod_kind {
             self.insert_sub_mod(sub_mod_kind.clone())?;
-            if self.recursive {
-                self.visit_sub_mod_inner(sub_mod, sub_mod_kind)?;
-            }
+            self.visit_sub_mod_inner(sub_mod, sub_mod_kind)?;
         }
         self.directory = old_directory;
         Ok(())
@@ -244,31 +242,26 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
     /// Inspect the given sub-module which we are about to visit and returns its kind.
     fn peek_sub_mod(
         &self,
+        item: &'c ast::Item,
         sub_mod: &Module<'ast>,
-    ) -> Result<Option<SubModKind<'ast>>, ModuleResolutionError> {
-        // XXX if contains_skip(&sub_mod.outer_attrs()) {
+    ) -> Result<Option<SubModKind<'c, 'ast>>, ModuleResolutionError> {
+        // XXX if contains_skip(&item.attrs) {
         // XXX     return Ok(None);
         // XXX }
 
-        if sub_mod
-            .ast_item
-            .as_ref()
-            .map_or(false, |item| is_mod_decl(&item))
-        {
+        if is_mod_decl(item) {
             // mod foo;
             // Look for an extern file.
-            self.find_external_module(sub_mod)
+            self.find_external_module(item.ident, &item.attrs, sub_mod)
         } else {
             // An internal module (`mod foo { /* ... */ }`);
-            Ok(Some(SubModKind::Internal(
-                sub_mod.ast_item.clone().unwrap(),
-            )))
+            Ok(Some(SubModKind::Internal(item)))
         }
     }
 
     fn insert_sub_mod(
         &mut self,
-        sub_mod_kind: SubModKind<'ast>,
+        sub_mod_kind: SubModKind<'c, 'ast>,
     ) -> Result<(), ModuleResolutionError> {
         match sub_mod_kind {
             SubModKind::External(mod_path, _, sub_mod) => {
@@ -283,7 +276,7 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
                         .or_insert(sub_mod);
                 }
             }
-            _ => {}
+            _ => (),
         }
         Ok(())
     }
@@ -291,7 +284,7 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
     fn visit_sub_mod_inner(
         &mut self,
         sub_mod: Module<'ast>,
-        sub_mod_kind: SubModKind<'ast>,
+        sub_mod_kind: SubModKind<'c, 'ast>,
     ) -> Result<(), ModuleResolutionError> {
         match sub_mod_kind {
             SubModKind::External(mod_path, directory_ownership, sub_mod) => {
@@ -326,116 +319,137 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
         if let Some(directory) = directory {
             self.directory = directory;
         }
-        match sub_mod.ast_mod {
-            Cow::Borrowed(sub_mod) => self.visit_mod_from_ast(sub_mod),
-            Cow::Owned(sub_mod) => self.visit_mod_outside_ast(sub_mod),
+        match (sub_mod.ast_mod_kind, sub_mod.items) {
+            (Some(Cow::Borrowed(ast::ModKind::Loaded(items, ast::Inline::No, _))), _) => {
+                self.visit_mod_from_ast(&items)
+            }
+            (Some(Cow::Owned(..)), Cow::Owned(items)) => self.visit_mod_outside_ast(items),
+            (_, _) => Ok(()),
         }
     }
 
     /// Find a file path in the filesystem which corresponds to the given module.
     fn find_external_module(
         &self,
+        mod_name: symbol::Ident,
+        attrs: &[ast::Attribute],
         sub_mod: &Module<'ast>,
-    ) -> Result<Option<SubModKind<'ast>>, ModuleResolutionError> {
+    ) -> Result<Option<SubModKind<'c, 'ast>>, ModuleResolutionError> {
         let relative = match self.directory.ownership {
             DirectoryOwnership::Owned { relative } => relative,
-            DirectoryOwnership::UnownedViaBlock | DirectoryOwnership::UnownedViaMod => None,
+            DirectoryOwnership::UnownedViaBlock => None,
         };
-        if let Some(path) =
-            Parser::submod_path_from_attr(sub_mod.outer_attrs(), &self.directory.path)
-        {
+        if let Some(path) = Parser::submod_path_from_attr(attrs, &self.directory.path) {
             if self.parse_sess.is_file_parsed(&path) {
                 return Ok(None);
             }
-            return match Parser::parse_file_as_module(self.parse_sess, &path, sub_mod.ast_mod.inner)
-            {
-                Ok(m) => Ok(Some(SubModKind::External(
+            return match Parser::parse_file_as_module(self.parse_sess, &path, sub_mod.span) {
+                // Ok((ref attrs, _, _)) if contains_skip(attrs) => Ok(None),
+                Ok((attrs, items, span)) => Ok(Some(SubModKind::External(
                     path,
                     DirectoryOwnership::Owned { relative: None },
-                    Module::new(Cow::Owned(m.0), sub_mod.ast_item.clone(), &m.1),
+                    Module::new(
+                        span,
+                        Some(Cow::Owned(ast::ModKind::Unloaded)),
+                        Cow::Owned(items),
+                        Cow::Owned(attrs),
+                    ),
                 ))),
                 Err(ParserError::ParseError) => Err(ModuleResolutionError {
-                    module: sub_mod.name(),
+                    module: mod_name.to_string(),
                     kind: ModuleResolutionErrorKind::ParseError { file: path },
                 }),
                 Err(..) => Err(ModuleResolutionError {
-                    module: sub_mod.name(),
+                    module: mod_name.to_string(),
                     kind: ModuleResolutionErrorKind::NotFound { file: path },
                 }),
             };
         }
 
         // Look for nested path, like `#[cfg_attr(feature = "foo", path = "bar.rs")]`.
-        let mut mods_outside_ast = self.find_mods_outside_of_ast(sub_mod);
+        let mut mods_outside_ast = self.find_mods_outside_of_ast(attrs, sub_mod);
 
         match self
             .parse_sess
-            .default_submod_path(sub_mod.ident(), relative, &self.directory.path)
-            .result
+            .default_submod_path(mod_name, relative, &self.directory.path)
         {
             Ok(ModulePathSuccess {
-                path, ownership, ..
+                file_path,
+                dir_ownership,
+                ..
             }) => {
                 let outside_mods_empty = mods_outside_ast.is_empty();
                 let should_insert = !mods_outside_ast
                     .iter()
-                    .any(|(outside_path, _, _)| outside_path == &path);
-                if self.parse_sess.is_file_parsed(&path) {
+                    .any(|(outside_path, _, _)| outside_path == &file_path);
+                if self.parse_sess.is_file_parsed(&file_path) {
                     if outside_mods_empty {
                         return Ok(None);
                     } else {
                         if should_insert {
-                            mods_outside_ast.push((path, ownership, sub_mod.clone()));
+                            mods_outside_ast.push((file_path, dir_ownership, sub_mod.clone()));
                         }
                         return Ok(Some(SubModKind::MultiExternal(mods_outside_ast)));
                     }
                 }
-                match Parser::parse_file_as_module(self.parse_sess, &path, sub_mod.ast_mod.inner) {
-                    Ok(m) if outside_mods_empty => Ok(Some(SubModKind::External(
-                        path,
-                        ownership,
-                        Module::new(Cow::Owned(m.0), sub_mod.ast_item.clone(), &m.1),
-                    ))),
-                    Ok(m) => {
+                match Parser::parse_file_as_module(self.parse_sess, &file_path, sub_mod.span) {
+                    // Ok((ref attrs, _, _)) if contains_skip(attrs) => Ok(None),
+                    Ok((attrs, items, span)) if outside_mods_empty => {
+                        Ok(Some(SubModKind::External(
+                            file_path,
+                            dir_ownership,
+                            Module::new(
+                                span,
+                                Some(Cow::Owned(ast::ModKind::Unloaded)),
+                                Cow::Owned(items),
+                                Cow::Owned(attrs),
+                            ),
+                        )))
+                    }
+                    Ok((attrs, items, span)) => {
                         mods_outside_ast.push((
-                            path.clone(),
-                            ownership,
-                            Module::new(Cow::Owned(m.0), sub_mod.ast_item.clone(), &m.1),
+                            file_path.clone(),
+                            dir_ownership,
+                            Module::new(
+                                span,
+                                Some(Cow::Owned(ast::ModKind::Unloaded)),
+                                Cow::Owned(items),
+                                Cow::Owned(attrs),
+                            ),
                         ));
                         if should_insert {
-                            mods_outside_ast.push((path, ownership, sub_mod.clone()));
+                            mods_outside_ast.push((file_path, dir_ownership, sub_mod.clone()));
                         }
                         Ok(Some(SubModKind::MultiExternal(mods_outside_ast)))
                     }
                     Err(ParserError::ParseError) => Err(ModuleResolutionError {
-                        module: sub_mod.name(),
-                        kind: ModuleResolutionErrorKind::ParseError { file: path },
+                        module: mod_name.to_string(),
+                        kind: ModuleResolutionErrorKind::ParseError { file: file_path },
                     }),
                     Err(..) if outside_mods_empty => Err(ModuleResolutionError {
-                        module: sub_mod.name(),
-                        kind: ModuleResolutionErrorKind::NotFound { file: path },
+                        module: mod_name.to_string(),
+                        kind: ModuleResolutionErrorKind::NotFound { file: file_path },
                     }),
                     Err(..) => {
                         if should_insert {
-                            mods_outside_ast.push((path, ownership, sub_mod.clone()));
+                            mods_outside_ast.push((file_path, dir_ownership, sub_mod.clone()));
                         }
                         Ok(Some(SubModKind::MultiExternal(mods_outside_ast)))
                     }
                 }
             }
-            Err(mut e) if !mods_outside_ast.is_empty() => {
-                e.cancel();
+            Err(mod_err) if !mods_outside_ast.is_empty() => {
+                if let ModError::ParserError(mut e) = mod_err {
+                    e.cancel();
+                }
                 Ok(Some(SubModKind::MultiExternal(mods_outside_ast)))
             }
-            Err(mut e) => {
-                e.cancel();
-                Err(ModuleResolutionError {
-                    module: sub_mod.name(),
-                    kind: ModuleResolutionErrorKind::NotFound {
-                        file: self.directory.path.clone(),
-                    },
-                })
-            }
+            Err(_) => Err(ModuleResolutionError {
+                module: mod_name.to_string(),
+                kind: ModuleResolutionErrorKind::NotFound {
+                    file: self.directory.path.clone(),
+                },
+            }),
         }
     }
 
@@ -462,16 +476,16 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
 
     fn find_mods_outside_of_ast(
         &self,
+        attrs: &[ast::Attribute],
         sub_mod: &Module<'ast>,
     ) -> Vec<(PathBuf, DirectoryOwnership, Module<'ast>)> {
         // Filter nested path, like `#[cfg_attr(feature = "foo", path = "bar.rs")]`.
         let mut path_visitor = visitor::PathVisitor::default();
-        for attr in sub_mod.outer_attrs() {
+        for attr in attrs.iter() {
             if let Some(meta) = attr.meta() {
                 path_visitor.visit_meta_item(&meta)
             }
         }
-
         let mut result = vec![];
         for path in path_visitor.paths() {
             let mut actual_path = self.directory.path.clone();
@@ -479,7 +493,6 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
             if !actual_path.exists() {
                 continue;
             }
-
             if self.parse_sess.is_file_parsed(&actual_path) {
                 // If the specified file is already parsed, then we just use that.
                 result.push((
@@ -489,20 +502,22 @@ impl<'ast, 'sess> ModResolver<'ast, 'sess> {
                 ));
                 continue;
             }
-
-            let m = match Parser::parse_file_as_module(
-                self.parse_sess,
-                &actual_path,
-                sub_mod.ast_mod.inner,
-            ) {
-                Ok(m) => m,
-                Err(..) => continue,
-            };
+            let (attrs, items, span) =
+                match Parser::parse_file_as_module(self.parse_sess, &actual_path, sub_mod.span) {
+                    // Ok((ref attrs, _, _)) if contains_skip(attrs) => continue,
+                    Ok(m) => m,
+                    Err(..) => continue,
+                };
 
             result.push((
                 actual_path,
                 DirectoryOwnership::Owned { relative: None },
-                Module::new(Cow::Owned(m.0), sub_mod.ast_item.clone(), &m.1),
+                Module::new(
+                    span,
+                    Some(Cow::Owned(ast::ModKind::Unloaded)),
+                    Cow::Owned(items),
+                    Cow::Owned(attrs),
+                ),
             ))
         }
         result
@@ -527,8 +542,8 @@ fn find_path_value(attrs: &[ast::Attribute]) -> Option<Symbol> {
 fn is_cfg_if(item: &ast::Item) -> bool {
     match item.kind {
         ast::ItemKind::MacCall(ref mac) => {
-            if let Some(last_segment) = mac.path.segments.last() {
-                if last_segment.ident.name.as_str() == "cfg_if" {
+            if let Some(first_segment) = mac.path.segments.first() {
+                if first_segment.ident.name == Symbol::intern("cfg_if") {
                     return true;
                 }
             }
