@@ -1,10 +1,6 @@
 use rustc_ast::ast;
 use rustc_span::Symbol;
 
-pub(crate) fn contains_name(attrs: &[ast::Attribute], name: Symbol) -> bool {
-    attrs.iter().any(|attr| attr.has_name(name))
-}
-
 pub(crate) fn first_attr_value_str_by_name(
     attrs: &[ast::Attribute],
     name: Symbol,

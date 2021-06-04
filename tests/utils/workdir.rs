@@ -1,7 +1,7 @@
 use std::env;
 use std::fmt;
 use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
@@ -14,12 +14,12 @@ use std::time::Duration;
 
 static API_INTEGRATION_TEST_DIR: &'static str = "integration_tests";
 
-static NEXT_ID: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
+static NEXT_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
 
 pub struct Workdir {
     root: PathBuf,
     dir: PathBuf,
-    flexible: bool,
+    // flexible: bool,
 }
 
 impl Workdir {
@@ -42,16 +42,16 @@ impl Workdir {
             panic!("Could not create '{:?}': {}", dir, err);
         }
         Workdir {
-            root: root,
-            dir: dir,
-            flexible: false,
+            root,
+            dir,
+            // flexible: false,
         }
     }
 
-    pub fn flexible(mut self, yes: bool) -> Workdir {
-        self.flexible = yes;
-        self
-    }
+    // pub fn flexible(mut self, yes: bool) -> Workdir {
+    //     self.flexible = yes;
+    //     self
+    // }
 
     // pub fn create<T: Csv>(&self, name: &str, rows: T) {
     //     let mut wtr = csv::WriterBuilder::new()
@@ -134,37 +134,37 @@ impl Workdir {
             .expect(&format!("Could not convert from string: '{}'", stdout))
     }
 
-    pub fn assert_err(&self, cmd: &mut process::Command) {
-        let o = cmd.output().unwrap();
-        if o.status.success() {
-            panic!(
-                "\n\n===== {:?} =====\n\
-                    command succeeded but expected failure!\
-                    \n\ncwd: {}\
-                    \n\nstatus: {}\
-                    \n\nstdout: {}\n\nstderr: {}\
-                    \n\n=====\n",
-                cmd,
-                self.dir.display(),
-                o.status,
-                String::from_utf8_lossy(&o.stdout),
-                String::from_utf8_lossy(&o.stderr)
-            );
-        }
-    }
+    // pub fn assert_err(&self, cmd: &mut process::Command) {
+    //     let o = cmd.output().unwrap();
+    //     if o.status.success() {
+    //         panic!(
+    //             "\n\n===== {:?} =====\n\
+    //                 command succeeded but expected failure!\
+    //                 \n\ncwd: {}\
+    //                 \n\nstatus: {}\
+    //                 \n\nstdout: {}\n\nstderr: {}\
+    //                 \n\n=====\n",
+    //             cmd,
+    //             self.dir.display(),
+    //             o.status,
+    //             String::from_utf8_lossy(&o.stdout),
+    //             String::from_utf8_lossy(&o.stderr)
+    //         );
+    //     }
+    // }
 
-    pub fn from_str<T: FromStr>(&self, name: &Path) -> T {
-        let mut o = String::new();
-        fs::File::open(name)
-            .unwrap()
-            .read_to_string(&mut o)
-            .unwrap();
-        o.parse().ok().expect("fromstr")
-    }
+    // pub fn from_str<T: FromStr>(&self, name: &Path) -> T {
+    //     let mut o = String::new();
+    //     fs::File::open(name)
+    //         .unwrap()
+    //         .read_to_string(&mut o)
+    //         .unwrap();
+    //     o.parse().ok().expect("fromstr")
+    // }
 
-    pub fn path(&self, name: &str) -> PathBuf {
-        self.dir.join(name)
-    }
+    // pub fn path(&self, name: &str) -> PathBuf {
+    //     self.dir.join(name)
+    // }
 
     pub fn apicheck_bin(&self) -> PathBuf {
         self.root.join("apicheck")

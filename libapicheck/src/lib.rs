@@ -24,7 +24,6 @@ mod input;
 pub(crate) mod items;
 pub(crate) mod modules;
 pub(crate) mod process;
-pub(crate) mod result;
 pub(crate) mod syntux;
 
 pub mod config;
@@ -109,14 +108,14 @@ pub enum ErrorKind {
     InvalidGlobPattern(ignore::Error),
 }
 
-impl ErrorKind {
-    fn is_comment(&self) -> bool {
-        match self {
-            ErrorKind::LostComment => true,
-            _ => false,
-        }
-    }
-}
+// impl ErrorKind {
+//     fn is_comment(&self) -> bool {
+//         match self {
+//             ErrorKind::LostComment => true,
+//             _ => false,
+//         }
+//     }
+// }
 
 impl From<io::Error> for ErrorKind {
     fn from(e: io::Error) -> ErrorKind {
@@ -137,7 +136,7 @@ fn process_project(input: Input, config: &Config) -> Result<(), ErrorKind> {
     // Parse the crate.
     let recursive = true;
     let directory_ownership = input.to_directory_ownership(recursive);
-    let original_snippet = if let Input::Text(ref str) = input {
+    let _original_snippet = if let Input::Text(ref str) = input {
         Some(str.to_owned())
     } else {
         None

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -151,6 +153,7 @@ impl<'ast, 'sess, 'c> ModResolver<'ast, 'sess> {
 
     /// Visit `cfg_if` macro and look for module declarations.
     fn visit_cfg_if(&mut self, item: Cow<'ast, ast::Item>) -> Result<(), ModuleResolutionError> {
+        let _ = item;
         unimplemented!();
         // let mut visitor = visitor::CfgIfVisitor::new(self.parse_sess);
         // visitor.visit_item(&item);

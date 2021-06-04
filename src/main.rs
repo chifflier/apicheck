@@ -7,14 +7,14 @@ use std::env;
 use std::path::PathBuf;
 
 use libapicheck::config::FileName;
-use libapicheck::Input;
+use libapicheck::{ErrorKind, Input};
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
     print!("{}", opts.usage(&brief));
 }
 
-fn main() {
+fn main() -> Result<(), ErrorKind> {
     let args: Vec<String> = env::args().collect();
     // process options
     let mut opts = Options::new();
@@ -27,7 +27,7 @@ fn main() {
     };
     if matches.opt_present("h") {
         print_usage(&args[0], opts);
-        return;
+        return Ok(());
     }
     // setup config
     let mut config = libapicheck::config::Config::default();
@@ -46,12 +46,12 @@ fn main() {
         matches.free[0].clone()
     } else {
         print_usage(&args[0], opts);
-        return;
+        return Ok(());
     };
     // work !
     if config.debug > 0 {
         println!("Processing file {}", input);
     }
     let input = Input::File(PathBuf::from(input));
-    libapicheck::process_file(input, &config);
+    libapicheck::process_file(input, &config)
 }

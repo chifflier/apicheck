@@ -634,17 +634,9 @@ fn js_add_generics(js: &mut json::JsonValue, generics: &ast::Generics, context: 
 /// Returns `true` for `mod foo;`, false for `mod foo { .. }`.
 pub(crate) fn is_mod_decl(item: &ast::Item) -> bool {
     match item.kind {
-        ast::ItemKind::Mod(unsafety, ast::ModKind::Loaded(_, _, span)) => {
+        ast::ItemKind::Mod(_, ast::ModKind::Loaded(_, _, span)) => {
             span.hi() != item.span.hi()
         }
         _ => false,
     }
-}
-
-pub(crate) fn is_use_item(item: &ast::Item) -> bool {
-    matches!(item.kind, ast::ItemKind::Use(_))
-}
-
-pub(crate) fn is_extern_crate(item: &ast::Item) -> bool {
-    matches!(item.kind, ast::ItemKind::ExternCrate(..))
 }
